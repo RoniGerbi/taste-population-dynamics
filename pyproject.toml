@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "taste-population-dynamics"
+version = "0.1.0"
+description = "Population dynamics of taste responses in cortical spike data: PSTHs, PCA trajectories and shuffle-based tests."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Ron Gerbi" }, { name = "Ofek Sourani" }]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pandas>=2.0",
+    "matplotlib>=3.7",
+    "scikit-learn>=1.3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
