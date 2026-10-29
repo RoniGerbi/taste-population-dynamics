@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import pytest
 
 from taste_dynamics import load_dataset, make_dataset, save_dataset
@@ -11,7 +12,8 @@ def test_roundtrip(tmp_path):
     assert (tmp_path / "spikes.npz").exists()
 
     loaded = load_dataset(tmp_path)
-    assert loaded.events.equals(ds.events)
+    # CSV stores decimal text, so allow a 1-ns difference in event times.
+    pd.testing.assert_frame_equal(loaded.events, ds.events, check_exact=False, rtol=0, atol=1e-9)
     assert loaded.unit_ids == ds.unit_ids
     for u in ds.spikes:
         np.testing.assert_array_equal(loaded.spikes[u], ds.spikes[u])
