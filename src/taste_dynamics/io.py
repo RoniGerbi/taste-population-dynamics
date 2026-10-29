@@ -46,7 +46,7 @@ def load_dataset(folder: str | Path) -> Dataset:
     not present after loading.
     """
     folder = Path(folder)
-    events = pd.read_csv(folder / "events.csv", float_precision="round_trip")
+    events = pd.read_csv(folder / "events.csv")
     missing = set(EVENT_COLUMNS) - set(events.columns)
     if missing:
         raise ValueError(f"events.csv is missing columns: {sorted(missing)}")
