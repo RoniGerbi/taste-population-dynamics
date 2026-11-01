@@ -14,12 +14,28 @@ Do cortical neuron populations keep a stable, trackable representation of a tast
 | 4 | PCA trajectories and demo figures | ⏳ |
 | 5 | Shuffle tests: session similarity, endpoints, velocity | ⏳ |
 
-## Conventions
+## Synthetic data
 
-- **All times are in seconds**: spike times, event times, windows, bin sizes and smoothing widths.
-- Spike data: `dict[int, np.ndarray]` mapping unit ID to sorted spike times.
-- Events: a table with columns `session`, `trial`, `taste`, `time_s`.
-- Files on disk: `events.csv` and `spikes.npz` (long format: `spike_times_s`, `unit_ids`). No pickle.
+`make_dataset()` simulates 7 sessions starting 400 s apart. Each session has 10 blocks in which water, NaCl and citric acid are delivered once each in random order, 12 s apart.
+
+Model:
+- A shared 2-D latent trajectory rotates and slows over the 3 s after each delivery; each taste starts at a different phase.
+- Taste-responsive units (70%) follow the latent through per-unit loadings and add a taste-specific early response.
+- Firing rate = baseline × exp(drive), with lognormal baselines (median 5 Hz); spikes are Poisson.
+- Loadings drift across sessions as a random walk (`session_drift=0.05`; set to `0` to disable).
+
+Ground truth is returned in `dataset.truth`, so tests can check whether each analysis recovers it.
+
+**Not modelled:** refractory periods, noise correlations between units, trial-to-trial variability beyond Poisson, response latency, temporal modulation in non-responsive units, and abrupt changes between sessions.
+
+## Data format
+
+To run the pipeline on your own recording, provide two files:
+
+- `events.csv`: one row per taste delivery, with columns `session`, `trial`, `taste`, `time_s`
+- `spikes.npz`: two equal-length arrays, `spike_times_s` and `unit_ids` (the layout spike sorters such as Kilosort export)
+
+All times are in seconds. Load them with `load_dataset("path/to/folder")`.
 
 ## Installation (Windows, Anaconda Prompt)
 
