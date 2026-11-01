@@ -4,7 +4,7 @@ The generator mimics the design of a multi-session taste-delivery experiment:
 several sessions, each made of repeated blocks in which every taste is
 delivered once in random order. After each delivery the population follows
 a taste-specific trajectory on a rotating 2-D latent plane that **slows down**
-over the response window, plus a taste-dependent onset response. Between
+over the response window, plus a taste-dependent early response. Between
 responses, units fire at their baseline rate (homogeneous Poisson).
 
 Because the ground truth is known, tests can check that the analysis
@@ -60,7 +60,7 @@ def _make_events(
     tastes: tuple[str, ...],
     n_sessions: int,
     n_blocks: int,
-    iti_range_s: tuple[float, float],
+    iti_s: float,
     session_gap_s: float,
     lead_s: float,
 ) -> pd.DataFrame:
@@ -73,7 +73,7 @@ def _make_events(
             for taste in rng.permutation(tastes):
                 rows.append({"session": s, "trial": trial, "taste": str(taste), "time_s": t})
                 trial += 1
-                t += rng.uniform(*iti_range_s)
+                t += iti_s
     return pd.DataFrame(rows)
 
 
@@ -95,7 +95,7 @@ def make_dataset(
     tastes: tuple[str, ...] = DEFAULT_TASTES,
     frac_responsive: float = 0.7,
     response_dur_s: float = 3.0,
-    iti_range_s: tuple[float, float] = (8.0, 12.0),
+    iti_s: float = 12.0,
     session_gap_s: float = 400.0,
     lead_s: float = 5.0,
     theta_max: float = 1.6 * np.pi,
@@ -117,31 +117,32 @@ def make_dataset(
     tastes : taste labels.
     frac_responsive : fraction of units whose rate is modulated by tastes.
     response_dur_s : duration of the modulated response after each delivery.
-    iti_range_s : inter-trial interval drawn uniformly from this range.
+    iti_s : fixed interval between consecutive deliveries within a session.
     session_gap_s : time between session starts.
     lead_s : quiet period before the first delivery of each session.
     theta_max : total rotation angle (rad) of the latent trajectory.
     tau_s : time constant of the angular slowing.
     gain : strength of the latent modulation (log-rate units).
-    session_drift : SD of a random-walk drift of unit loadings across sessions.
+    session_drift : SD of the per-session random-walk step of unit loadings
+        (0 disables drift: every session uses the same loadings).
     dt_s : time step used to draw response spikes.
     max_rate_hz : ceiling on instantaneous firing rate.
     seed : random seed (``None`` for a fresh random state).
     """
-    if response_dur_s >= iti_range_s[0]:
+    if response_dur_s >= iti_s:
         raise ValueError("response_dur_s must be shorter than the minimum ITI")
     rng = np.random.default_rng(seed)
     n_tastes = len(tastes)
 
-    events = _make_events(rng, tastes, n_sessions, n_blocks, iti_range_s, session_gap_s, lead_s)
-    t_end = float(events["time_s"].max()) + iti_range_s[1]
+    events = _make_events(rng, tastes, n_sessions, n_blocks, iti_s, session_gap_s, lead_s)
+    t_end = float(events["time_s"].max()) + iti_s
 
     # --- Unit parameters -------------------------------------------------
     baseline_hz = np.clip(rng.lognormal(np.log(5.0), 0.6, n_units), 0.5, 30.0)
     responsive = rng.random(n_units) < frac_responsive
     loadings = rng.normal(0.0, 1.0, (n_units, 2)) * responsive[:, None]
-    # Taste-specific onset response (mostly excitatory) for responsive units.
-    onset = rng.normal(0.6, 0.4, (n_units, n_tastes)) * responsive[:, None]
+    # Size of each unit's early response to each taste (mostly excitatory).
+    early_amplitude = rng.normal(0.6, 0.4, (n_units, n_tastes)) * responsive[:, None]
     phases = np.linspace(0.0, 2 * np.pi, n_tastes, endpoint=False)
 
     # Loadings drift slowly across sessions (random walk).
@@ -152,7 +153,7 @@ def make_dataset(
 
     # --- Response-window spikes (inhomogeneous Poisson) ------------------
     t_rel = np.arange(0.0, response_dur_s, dt_s)
-    onset_shape = np.exp(-t_rel / 0.5)  # decaying onset transient
+    early_decay = np.exp(-t_rel / 0.5)  # time course of the early response
     latents = {
         taste: _latent_trajectory(t_rel, phases[k], theta_max, tau_s) for k, taste in enumerate(tastes)
     }
@@ -162,7 +163,7 @@ def make_dataset(
     for ev in events.itertuples(index=False):
         k = taste_index[ev.taste]
         drive = gain * session_loadings[ev.session] @ latents[ev.taste]  # (n_units, n_t)
-        drive += onset[:, [k]] * onset_shape[None, :]
+        drive += early_amplitude[:, [k]] * early_decay[None, :]
         rate = np.minimum(baseline_hz[:, None] * np.exp(drive), max_rate_hz)
         u_idx, t_idx = np.nonzero(rng.random(rate.shape) < rate * dt_s)
         resp_units.append(u_idx)
@@ -184,7 +185,8 @@ def make_dataset(
         "baseline_hz": baseline_hz,
         "responsive": responsive,
         "loadings": loadings,
-        "onset": onset,
+        "session_loadings": np.stack(session_loadings),  # (n_sessions, n_units, 2)
+        "early_amplitude": early_amplitude,
         "phases": dict(zip(tastes, phases)),
         "response_dur_s": response_dur_s,
         "theta_max": theta_max,

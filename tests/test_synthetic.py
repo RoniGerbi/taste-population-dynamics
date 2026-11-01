@@ -54,4 +54,27 @@ def test_responsive_units_fire_more_after_taste(ds):
 
 def test_rejects_response_longer_than_iti():
     with pytest.raises(ValueError):
-        make_dataset(response_dur_s=10.0, iti_range_s=(8.0, 12.0))
+        make_dataset(response_dur_s=12.0, iti_s=12.0)
+
+
+def test_fixed_iti_within_session(ds):
+    for _, sess in ds.events.groupby("session"):
+        np.testing.assert_allclose(np.diff(sess["time_s"].to_numpy()), 12.0)
+
+
+def test_zero_drift_gives_identical_loadings():
+    ds = make_dataset(n_units=20, n_sessions=4, n_blocks=2, session_drift=0.0, seed=4)
+    sl = ds.truth["session_loadings"]
+    assert sl.shape == (4, 20, 2)
+    for s in range(1, 4):
+        np.testing.assert_array_equal(sl[s], sl[0])
+
+
+def test_drift_is_a_random_walk():
+    """Loading differences grow with session lag (~ sqrt(lag)) and spare non-responsive units."""
+    ds = make_dataset(n_units=400, n_sessions=7, n_blocks=1, session_drift=0.05, seed=6)
+    sl, resp = ds.truth["session_loadings"], ds.truth["responsive"]
+    sd = {lag: (sl[lag] - sl[0])[resp].std() for lag in (1, 4)}
+    assert np.isclose(sd[1], 0.05, rtol=0.15)
+    assert np.isclose(sd[4], 0.05 * 2, rtol=0.15)
+    assert np.all(sl[:, ~resp] == 0)
