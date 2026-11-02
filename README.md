@@ -2,7 +2,7 @@
 
 Do cortical neuron populations keep a stable, trackable representation of a taste across repeated sessions without any learning? This repository contains the analysis pipeline from a computational-neuroscience course project that addressed that question with multi-session taste-delivery recordings. It covers spike alignment, PSTHs, unit screening, PCA trajectories, and shuffle-based tests of session similarity, endpoint convergence and trajectory velocity.
 
-> **No real data is included.** The pipeline runs on a synthetic generator that reproduces the experimental design (sessions × repeated blocks of randomized tastes) and has a known low-dimensional trajectory, so every step can be tested against ground truth.
+> **No real data is included.** The pipeline was developed for real recordings, which remain unpublished. A synthetic data generator that reproduces the experimental design stands in for them: it produces the example figures and lets the tests check each step against a known ground truth.
 
 **Status:** work in progress, built step by step.
 
@@ -12,13 +12,14 @@ Do cortical neuron populations keep a stable, trackable representation of a tast
 | 2 | Spike alignment, firing rates, PSTHs, population tensor | ✅ |
 | 3 | Unit screening: responsiveness and taste specificity | ✅ |
 | 4 | PCA trajectories and demo figures | ✅ |
-| 5 | Shuffle tests: session similarity, endpoints, velocity | ⏳ |
+| 5a | Stability across sessions: session similarity, endpoints, drift | ✅ |
+| 5b | Trajectory velocity: early vs. late, repeated-measures ANOVA | ⏳ |
 
-## Results on synthetic data
+## Example output
 
-Generated with `python scripts/demo.py` (seed 0).
+The pipeline was built for, and applied to, multi-session Neuropixels recordings. Those recordings are unpublished and not included here. To show what the pipeline produces without publishing them, every figure below is generated from **simulated data** (`python scripts/demo.py`, seed 0). The figures demonstrate the analyses; they are not findings.
 
-**Single units.** Rasters (top; trials grouped by taste) and PSTHs (bottom) of three taste-specific units.
+**Single units.** Rasters (top; trials grouped by taste) and PSTHs (bottom) for three units.
 
 ![Rasters and PSTHs](figures/raster_psth.png)
 
@@ -26,9 +27,21 @@ Generated with `python scripts/demo.py` (seed 0).
 
 ![Explained variance](figures/explained_variance.png)
 
-**Population trajectories.** Each session's trajectory in the first two PCs (circle: delivery; triangle: 3 s later). Trajectories are consistent across sessions and slow down toward the end of the response window.
+**Population trajectories.** Each session's trajectory in the first two PCs (circle: delivery; triangle: 3 s later).
 
 ![PCA trajectories](figures/pca_trajectories.png)
+
+**Session similarity.** Distance between every pair of sessions' population responses, as a z-score against a null in which each unit's time bins are shuffled (`*`: FDR-corrected p < 0.05).
+
+![Session similarity](figures/session_similarity.png)
+
+**Drift.** Distance between sessions against the number of sessions between them, with a Mantel test in which the session order is permuted.
+
+![Distance vs. lag](figures/distance_vs_lag.png)
+
+**Endpoints.** Each session's state 3 s after delivery in PC space, against endpoints from data with shuffled population vectors.
+
+![Endpoints](figures/endpoints.png)
 
 ## Synthetic data
 
@@ -100,12 +113,23 @@ from taste_dynamics.dynamics import pca_trajectories
 # normalize: None (rates in spikes/s, default), "zscore" or "soft"
 result = pca_trajectories(tensor, n_components=4, normalize=None)
 result.trajectories, result.explained_variance_ratio
+
+from taste_dynamics.stability import drift_test, endpoint_test, session_similarity_test
+
+# Shuffle tests: one row per session pair (z, p, p_adj) plus an overall test on the mean distance
+similarity = session_similarity_test(tensor, n_shuffles=1000, correction="fdr_bh", seed=0)
+endpoints = endpoint_test(tensor, n_components=4, n_shuffles=1000, seed=0)
+endpoints.overall  # {"observed_mean", "null_mean", "null_sd", "p"}
+
+# Mantel test: does distance between sessions grow with the time between them?
+drift_test(similarity.observed)  # {"r", "p", "n_permutations"}
 ```
 
 ### Preprocessing choices
 
 - Time windows include their start and exclude their end, `[start, end)`, so no spike is counted twice.
 - PSTHs are averaged over trials and expressed in spikes/s; smoothing width is set in seconds (`sigma_s`).
+- Shuffle-test p-values are empirical, `(1 + #null ≥ observed) / (1 + n_shuffles)`, and seeded for reproducibility. They are one-sided by default (is a distance *smaller* than chance?).
 - Units can optionally be normalized before PCA (`normalize="zscore"` or `"soft"`; default `None`). Soft normalization follows Churchland et al. (2012).
 
 ## Repository layout
@@ -117,7 +141,8 @@ src/taste_dynamics/   package code
   preprocessing.py    spike alignment, firing rates, PSTHs, population tensor
   screening.py        taste responsiveness and specificity tests
   dynamics.py         PCA trajectories
-  plotting.py         rasters, PSTHs, explained variance, trajectories
+  stability.py        session similarity, endpoint and drift tests
+  plotting.py         figures for all of the above
 scripts/              make_synthetic_data.py, demo.py
 figures/              figures produced by demo.py
 tests/                pytest test suite (run automatically by GitHub Actions)
