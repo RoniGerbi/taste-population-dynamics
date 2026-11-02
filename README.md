@@ -11,8 +11,24 @@ Do cortical neuron populations keep a stable, trackable representation of a tast
 | 1 | Project skeleton, synthetic data, pickle-free I/O | ✅ |
 | 2 | Spike alignment, firing rates, PSTHs, population tensor | ✅ |
 | 3 | Unit screening: responsiveness and taste specificity | ✅ |
-| 4 | PCA trajectories and demo figures | ⏳ |
+| 4 | PCA trajectories and demo figures | ✅ |
 | 5 | Shuffle tests: session similarity, endpoints, velocity | ⏳ |
+
+## Results on synthetic data
+
+Generated with `python scripts/demo.py` (seed 0).
+
+**Single units.** Rasters (top; trials grouped by taste) and PSTHs (bottom) of three taste-specific units.
+
+![Rasters and PSTHs](figures/raster_psth.png)
+
+**Dimensionality.** Cumulative variance explained by PCA of each taste's population activity.
+
+![Explained variance](figures/explained_variance.png)
+
+**Population trajectories.** Each session's trajectory in the first two PCs (circle: delivery; triangle: 3 s later). Trajectories are consistent across sessions and slow down toward the end of the response window.
+
+![PCA trajectories](figures/pca_trajectories.png)
 
 ## Synthetic data
 
@@ -51,6 +67,7 @@ pip install -e ".[dev]"
 
 ```bat
 python scripts\make_synthetic_data.py
+python scripts\demo.py
 pytest
 ```
 
@@ -76,12 +93,20 @@ from taste_dynamics.screening import find_responsive_units, find_taste_specific_
 # One row per unit: rates, test statistic, raw and corrected p-values, verdict
 responsive = find_responsive_units(ds, alpha=0.01, correction="fdr_bh")
 specific = find_taste_specific_units(ds, alpha=0.01, correction="fdr_bh")
+
+from taste_dynamics.dynamics import pca_trajectories
+
+# PCA fitted on all sessions together; trajectories: (sessions, bins, components)
+# normalize: None (rates in spikes/s, default), "zscore" or "soft"
+result = pca_trajectories(tensor, n_components=4, normalize=None)
+result.trajectories, result.explained_variance_ratio
 ```
 
 ### Preprocessing choices
 
 - Time windows include their start and exclude their end, `[start, end)`, so no spike is counted twice.
 - PSTHs are averaged over trials and expressed in spikes/s; smoothing width is set in seconds (`sigma_s`).
+- Units can optionally be normalized before PCA (`normalize="zscore"` or `"soft"`; default `None`). Soft normalization follows Churchland et al. (2012).
 
 ## Repository layout
 
@@ -91,9 +116,16 @@ src/taste_dynamics/   package code
   io.py               save/load events.csv + spikes.npz
   preprocessing.py    spike alignment, firing rates, PSTHs, population tensor
   screening.py        taste responsiveness and specificity tests
-scripts/              command-line entry points
+  dynamics.py         PCA trajectories
+  plotting.py         rasters, PSTHs, explained variance, trajectories
+scripts/              make_synthetic_data.py, demo.py
+figures/              figures produced by demo.py
 tests/                pytest test suite (run automatically by GitHub Actions)
 ```
+
+## References
+
+Churchland, M. M., Cunningham, J. P., Kaufman, M. T., Foster, J. D., Nuyujukian, P., Ryu, S. I., & Shenoy, K. V. (2012). Neural population dynamics during reaching. *Nature*, 487, 51–56. https://doi.org/10.1038/nature11129
 
 ## Authors
 
