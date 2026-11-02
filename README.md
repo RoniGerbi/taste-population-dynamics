@@ -10,7 +10,7 @@ Do cortical neuron populations keep a stable, trackable representation of a tast
 |---|---|---|
 | 1 | Project skeleton, synthetic data, pickle-free I/O | ✅ |
 | 2 | Spike alignment, firing rates, PSTHs, population tensor | ✅ |
-| 3 | Unit screening: responsiveness and taste specificity | ⏳ |
+| 3 | Unit screening: responsiveness and taste specificity | ✅ |
 | 4 | PCA trajectories and demo figures | ⏳ |
 | 5 | Shuffle tests: session similarity, endpoints, velocity | ⏳ |
 
@@ -70,13 +70,18 @@ tensor, bin_centers, unit_ids = population_tensor(
 
 # Single-unit PSTH around all deliveries
 rates, edges = psth(ds.spikes[0], ds.events["time_s"], window=(-1.0, 3.0), bin_s=0.1)
+
+from taste_dynamics.screening import find_responsive_units, find_taste_specific_units
+
+# One row per unit: rates, test statistic, raw and corrected p-values, verdict
+responsive = find_responsive_units(ds, alpha=0.01, correction="fdr_bh")
+specific = find_taste_specific_units(ds, alpha=0.01, correction="fdr_bh")
 ```
 
 ### Preprocessing choices
 
-- Windows are half-open, `[start, end)`, so a spike on a boundary is counted once.
-- Counting uses binary search on sorted spike times, which is vectorized over trials and bins.
-- Smoothing is Gaussian with its width given in seconds (`sigma_s=0.15`), converted to bins internally.
+- Time windows include their start and exclude their end, `[start, end)`, so no spike is counted twice.
+- PSTHs are averaged over trials and expressed in spikes/s; smoothing width is set in seconds (`sigma_s`).
 
 ## Repository layout
 
@@ -85,6 +90,7 @@ src/taste_dynamics/   package code
   synthetic.py        synthetic experiment generator with ground truth
   io.py               save/load events.csv + spikes.npz
   preprocessing.py    spike alignment, firing rates, PSTHs, population tensor
+  screening.py        taste responsiveness and specificity tests
 scripts/              command-line entry points
 tests/                pytest test suite (run automatically by GitHub Actions)
 ```
