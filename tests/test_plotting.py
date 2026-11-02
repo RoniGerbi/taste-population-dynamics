@@ -29,3 +29,21 @@ def test_explained_variance_and_trajectories(ds, tmp_path):
     assert len(fig.axes) == 3  # one panel per taste
     fig.savefig(tmp_path / "traj.png")
     plt.close(fig)
+
+
+def test_stability_figures(ds, tmp_path):
+    from taste_dynamics.plotting import format_p, plot_distance_vs_lag, plot_endpoints, plot_session_similarity
+    from taste_dynamics.stability import drift_test, endpoint_test, session_similarity_test
+
+    tensors = {t: population_tensor(ds, t)[0] for t in ds.tastes}
+    sim = {t: session_similarity_test(x, n_shuffles=20) for t, x in tensors.items()}
+    ends = {t: endpoint_test(x, n_components=2, n_shuffles=20) for t, x in tensors.items()}
+    drift = {t: drift_test(r.observed) for t, r in sim.items()}
+    for name, fig in {
+        "sim": plot_session_similarity(sim),
+        "ends": plot_endpoints(ends),
+        "lag": plot_distance_vs_lag(sim, drift),
+    }.items():
+        fig.savefig(tmp_path / f"{name}.png")
+        plt.close(fig)
+    assert format_p(0.0004) == "p < 0.001" and format_p(0.0162) == "p = 0.016"

@@ -17,6 +17,11 @@ from taste_dynamics.synthetic import Dataset
 TASTE_COLORS = ("#3b75af", "#e1a33b", "#c44e52", "#55a868", "#8172b3")
 
 
+def format_p(p: float) -> str:
+    """'p = 0.016' or 'p < 0.001'."""
+    return "p < 0.001" if p < 0.001 else f"p = {p:.3f}"
+
+
 def taste_colors(tastes: list[str]) -> dict[str, str]:
     """A fixed color for each taste, in order."""
     return {taste: TASTE_COLORS[i % len(TASTE_COLORS)] for i, taste in enumerate(tastes)}
@@ -104,5 +109,74 @@ def plot_trajectories(results_by_taste: dict[str, PCAResult]) -> Figure:
         ax.set_title(taste)
         ax.spines[["top", "right"]].set_visible(False)
     axes[0, -1].legend(frameon=False, fontsize=7, loc="center left", bbox_to_anchor=(1, 0.5))
+    fig.tight_layout()
+    return fig
+
+
+def plot_session_similarity(results_by_taste: dict, alpha: float = 0.05) -> Figure:
+    """Lower-triangle heatmaps of z-scored session-pair distances, one per taste.
+
+    Negative z = sessions more similar than the shuffled null; ``*`` marks pairs
+    with ``p_adj < alpha``.
+    """
+    tastes = list(results_by_taste)
+    zmax = max(np.nanmax(np.abs(r.pairs["z"])) for r in results_by_taste.values())
+    fig, axes = plt.subplots(1, len(tastes), figsize=(3.8 * len(tastes), 3.6), squeeze=False)
+    for ax, taste in zip(axes[0], tastes):
+        result = results_by_taste[taste]
+        n = result.observed.shape[0]
+        z = np.full((n, n), np.nan)
+        for row in result.pairs.itertuples():
+            z[row.session_b, row.session_a] = row.z
+            if row.p_adj < alpha:
+                ax.text(row.session_a, row.session_b, "*", ha="center", va="center", fontsize=11)
+        image = ax.imshow(z, cmap="RdBu_r", vmin=-zmax, vmax=zmax)
+        ax.set_xticks(range(n), [str(i + 1) for i in range(n)])
+        ax.set_yticks(range(n), [str(i + 1) for i in range(n)])
+        ax.set_xlabel("Session")
+        ax.set_title(taste)
+    axes[0, 0].set_ylabel("Session")
+    fig.colorbar(image, ax=axes[0].tolist(), label="z (vs. shuffled null)", shrink=0.8)
+    return fig
+
+
+def plot_endpoints(results_by_taste: dict) -> Figure:
+    """Session endpoints (PC1 vs. PC2) against endpoints from shuffled data, one panel per taste."""
+    tastes = list(results_by_taste)
+    colors = taste_colors(tastes)
+    fig, axes = plt.subplots(1, len(tastes), figsize=(4 * len(tastes), 3.8), squeeze=False)
+    for ax, taste in zip(axes[0], tastes):
+        result = results_by_taste[taste]
+        null = result.null_points.reshape(-1, result.null_points.shape[-1])
+        ax.scatter(null[:, 0], null[:, 1], s=3, color="0.75", alpha=0.3, linewidths=0, label="Shuffled")
+        ax.scatter(result.points[:, 0], result.points[:, 1], s=30, color=colors[taste], label="Observed")
+        o = result.overall
+        ax.set_title(f"{taste}\nmean distance {o['observed_mean']:.1f} vs. {o['null_mean']:.1f}, {format_p(o['p'])}")
+        ax.set_xlabel("PC1")
+        ax.spines[["top", "right"]].set_visible(False)
+    axes[0, 0].set_ylabel("PC2")
+    axes[0, -1].legend(frameon=False, fontsize=8, markerscale=2)
+    fig.tight_layout()
+    return fig
+
+
+def plot_distance_vs_lag(results_by_taste: dict, drift_by_taste: dict) -> Figure:
+    """Distance between sessions against the number of sessions between them, one panel per taste.
+
+    ``drift_by_taste`` holds the :func:`taste_dynamics.stability.drift_test` result for each taste.
+    """
+    tastes = list(results_by_taste)
+    colors = taste_colors(tastes)
+    fig, axes = plt.subplots(1, len(tastes), figsize=(3.8 * len(tastes), 3.4), squeeze=False, sharey=True)
+    for ax, taste in zip(axes[0], tastes):
+        pairs = results_by_taste[taste].pairs
+        ax.scatter(pairs["lag"], pairs["observed"], color=colors[taste], s=20)
+        means = pairs.groupby("lag")["observed"].mean()
+        ax.plot(means.index, means.values, color=colors[taste], linewidth=1)
+        drift = drift_by_taste[taste]
+        ax.set_title(f"{taste}\nSpearman r = {drift['r']:.2f}, {format_p(drift['p'])}")
+        ax.set_xlabel("Sessions apart")
+        ax.spines[["top", "right"]].set_visible(False)
+    axes[0, 0].set_ylabel("Distance between sessions")
     fig.tight_layout()
     return fig

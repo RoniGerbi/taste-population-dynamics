@@ -16,9 +16,18 @@ matplotlib.use("Agg")  # write files only; no window needed
 
 from taste_dynamics import make_dataset  # noqa: E402
 from taste_dynamics.dynamics import cumulative_explained_variance, pca_trajectories  # noqa: E402
-from taste_dynamics.plotting import plot_explained_variance, plot_raster_psth, plot_trajectories  # noqa: E402
+from taste_dynamics.plotting import (  # noqa: E402
+    format_p,
+    plot_distance_vs_lag,
+    plot_endpoints,
+    plot_explained_variance,
+    plot_raster_psth,
+    plot_session_similarity,
+    plot_trajectories,
+)
 from taste_dynamics.preprocessing import population_tensor  # noqa: E402
 from taste_dynamics.screening import find_responsive_units, find_taste_specific_units  # noqa: E402
+from taste_dynamics.stability import drift_test, endpoint_test, session_similarity_test  # noqa: E402
 
 
 def main() -> None:
@@ -56,6 +65,23 @@ def main() -> None:
     plot_trajectories(results).savefig(out / "pca_trajectories.png", dpi=150, bbox_inches="tight")
     for taste, r in results.items():
         print(f"{taste:12s} variance explained by 4 PCs: {r.explained_variance_ratio.sum():.0%}")
+
+    # Stability across sessions
+    similarity = {taste: session_similarity_test(t, correction="fdr_bh") for taste, t in tensors.items()}
+    endpoints = {
+        taste: endpoint_test(t, n_components=4, normalize=args.normalize, correction="fdr_bh")
+        for taste, t in tensors.items()
+    }
+    drift = {taste: drift_test(r.observed) for taste, r in similarity.items()}
+    plot_session_similarity(similarity).savefig(out / "session_similarity.png", dpi=150, bbox_inches="tight")
+    plot_endpoints(endpoints).savefig(out / "endpoints.png", dpi=150)
+    plot_distance_vs_lag(similarity, drift).savefig(out / "distance_vs_lag.png", dpi=150)
+    for taste in tensors:
+        s, e, d = similarity[taste], endpoints[taste], drift[taste]
+        print(
+            f"{taste:12s} similar pairs {s.n_significant()}/{len(s.pairs)} | endpoints closer than chance: "
+            f"{format_p(e.overall['p'])} | drift: r = {d['r']:.2f}, {format_p(d['p'])}"
+        )
     print(f"Figures saved to {out}/")
 
 
