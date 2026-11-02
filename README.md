@@ -97,7 +97,8 @@ specific = find_taste_specific_units(ds, alpha=0.01, correction="fdr_bh")
 from taste_dynamics.dynamics import pca_trajectories
 
 # PCA fitted on all sessions together; trajectories: (sessions, bins, components)
-result = pca_trajectories(tensor, n_components=4)
+# normalize: None (rates in spikes/s, default), "zscore" or "soft"
+result = pca_trajectories(tensor, n_components=4, normalize=None)
 result.trajectories, result.explained_variance_ratio
 ```
 
@@ -105,6 +106,7 @@ result.trajectories, result.explained_variance_ratio
 
 - Time windows include their start and exclude their end, `[start, end)`, so no spike is counted twice.
 - PSTHs are averaged over trials and expressed in spikes/s; smoothing width is set in seconds (`sigma_s`).
+- Units can optionally be normalized before PCA (`normalize="zscore"` or `"soft"`; default `None`). Soft normalization follows Churchland et al. (2012).
 
 ## Repository layout
 
@@ -120,6 +122,10 @@ scripts/              make_synthetic_data.py, demo.py
 figures/              figures produced by demo.py
 tests/                pytest test suite (run automatically by GitHub Actions)
 ```
+
+## References
+
+Churchland, M. M., Cunningham, J. P., Kaufman, M. T., Foster, J. D., Nuyujukian, P., Ryu, S. I., & Shenoy, K. V. (2012). Neural population dynamics during reaching. *Nature*, 487, 51–56. https://doi.org/10.1038/nature11129
 
 ## Authors
 

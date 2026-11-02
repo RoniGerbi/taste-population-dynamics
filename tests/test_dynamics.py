@@ -2,7 +2,12 @@ import numpy as np
 import pytest
 
 from taste_dynamics import make_dataset
-from taste_dynamics.dynamics import cumulative_explained_variance, flatten_sessions, pca_trajectories
+from taste_dynamics.dynamics import (
+    cumulative_explained_variance,
+    flatten_sessions,
+    normalize_units,
+    pca_trajectories,
+)
 from taste_dynamics.preprocessing import population_tensor
 
 
@@ -68,3 +73,31 @@ def test_trajectories_rotate(ds, taste):
     direction = np.sign(np.median(steps))
     assert np.mean(np.sign(steps) == direction) > 0.9
     assert np.all(np.abs(angle[:, -1] - angle[:, 0]) > np.pi)
+
+
+def test_normalize_units():
+    rng = np.random.default_rng(2)
+    tensor = rng.gamma(2.0, 5.0, size=(3, 10, 6))
+    tensor[:, :, 5] = 7.0  # a constant unit
+    np.testing.assert_array_equal(normalize_units(tensor, None), tensor)
+
+    z = flatten_sessions(normalize_units(tensor, "zscore"))
+    np.testing.assert_allclose(z[:, :5].mean(axis=0), 0, atol=1e-12)
+    np.testing.assert_allclose(z[:, :5].std(axis=0), 1)
+    np.testing.assert_array_equal(z[:, 5], 0)  # no division by zero
+
+    soft = normalize_units(tensor, "soft", soft_offset_hz=5.0)
+    flat = flatten_sessions(tensor)
+    np.testing.assert_allclose(soft[0, 0], tensor[0, 0] / (flat.max(0) - flat.min(0) + 5.0))
+
+    with pytest.raises(ValueError, match="normalize"):
+        normalize_units(tensor, "minmax")
+
+
+@pytest.mark.parametrize("normalize", [None, "zscore", "soft"])
+def test_pca_with_normalization_runs(ds, normalize):
+    tensor, _, _ = population_tensor(ds, "water")
+    result = pca_trajectories(tensor, n_components=4, normalize=normalize)
+    assert result.trajectories.shape == (7, 30, 4)
+    assert np.all(np.isfinite(result.trajectories))
+    assert np.isclose(cumulative_explained_variance(tensor, 8, normalize)[3], result.explained_variance_ratio.sum())

@@ -4,6 +4,7 @@ Usage (from the repository root, with the virtual environment active):
 
     python scripts/demo.py
     python scripts/demo.py --seed 3 --out figures_seed3
+    python scripts/demo.py --normalize zscore --out figures_zscore
 """
 
 import argparse
@@ -24,6 +25,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", default="figures")
+    parser.add_argument("--normalize", choices=["zscore", "soft"], default=None, help="rescale units before PCA")
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -44,10 +46,13 @@ def main() -> None:
 
     # Population analysis, one PCA per taste
     tensors = {taste: population_tensor(ds, taste)[0] for taste in ds.tastes}
-    cumulative = {taste: cumulative_explained_variance(t, max_components=8) for taste, t in tensors.items()}
+    cumulative = {
+        taste: cumulative_explained_variance(t, max_components=8, normalize=args.normalize)
+        for taste, t in tensors.items()
+    }
     plot_explained_variance(cumulative).savefig(out / "explained_variance.png", dpi=150)
 
-    results = {taste: pca_trajectories(t, n_components=4) for taste, t in tensors.items()}
+    results = {taste: pca_trajectories(t, n_components=4, normalize=args.normalize) for taste, t in tensors.items()}
     plot_trajectories(results).savefig(out / "pca_trajectories.png", dpi=150, bbox_inches="tight")
     for taste, r in results.items():
         print(f"{taste:12s} variance explained by 4 PCs: {r.explained_variance_ratio.sum():.0%}")
