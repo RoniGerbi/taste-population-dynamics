@@ -1,6 +1,6 @@
 """Figures for every analysis step.
 
-* ``plot_overview`` - one figure, one taste, all analyses (used in the README).
+* ``plot_overview`` - one figure, one taste, all analyses (shown in the README).
 * ``plot_*`` - one figure per analysis, with a panel per taste.
 
 Each figure is built from small ``draw_*`` functions that draw into a given
@@ -143,6 +143,33 @@ def draw_endpoints(ax: Axes, result, color: str) -> None:
     _clean(ax)
 
 
+def draw_velocity(ax: Axes, result, color: str, fraction: float = 0.2) -> None:
+    """Mean trajectory speed over time (± SEM across sessions), with the early and late windows shaded."""
+    mean = result.speed.mean(axis=0)
+    sem = result.speed.std(axis=0, ddof=1) / np.sqrt(result.speed.shape[0])
+    t = result.step_times
+    n = int(np.ceil(fraction * len(t)))
+    ax.axvspan(t[0], t[n - 1], color="0.9", zorder=0)
+    ax.axvspan(t[-n], t[-1], color="0.9", zorder=0)
+    ax.fill_between(t, mean - sem, mean + sem, color=color, alpha=0.25, linewidth=0)
+    ax.plot(t, mean, color=color)
+    ax.set_xlabel("Time from delivery (s)")
+    ax.set_ylabel("Speed (PC units/s)")
+    _clean(ax)
+
+
+def draw_early_late(ax: Axes, result, color: str) -> None:
+    """Each session's early and late speed, joined by a line, with the paired t-test result."""
+    for e, l in zip(result.early, result.late):
+        ax.plot([0, 1], [e, l], color=color, alpha=0.5, marker="o", markersize=4)
+    ax.set_xticks([0, 1], ["Early", "Late"])
+    ax.set_xlim(-0.4, 1.4)
+    ax.set_ylabel("Mean speed (PC units/s)")
+    ax.text(0.97, 0.97, f"paired t = {result.paired_t:.1f}\n{format_p(result.paired_p)}",
+            transform=ax.transAxes, ha="right", va="top", fontsize=8)
+    _clean(ax)
+
+
 # --- One-taste overview ------------------------------------------------------------------------
 
 
@@ -155,32 +182,38 @@ def plot_overview(
     similarity,
     drift: dict,
     endpoints,
+    velocity,
     color: str = TASTE_COLORS[0],
 ) -> Figure:
-    """All analyses for one taste in a single figure (panels A-F)."""
-    fig = plt.figure(figsize=(13, 7.6))
-    grid = fig.add_gridspec(2, 3, hspace=0.45, wspace=0.35)
+    """All analyses for one taste in a single figure (panels A-H)."""
+    fig = plt.figure(figsize=(17, 7.6))
+    grid = fig.add_gridspec(2, 4, hspace=0.45, wspace=0.38)
     raster_psth = grid[0, 0].subgridspec(2, 1, height_ratios=[1.2, 1], hspace=0.08)
     ax_raster, ax_psth = fig.add_subplot(raster_psth[0]), fig.add_subplot(raster_psth[1])
     draw_raster_psth(ax_raster, ax_psth, dataset, unit, [taste], {taste: color})
     ax_raster.set_ylabel("Trials")
     ax_psth.set_ylabel("Spikes/s")
 
-    panels = [fig.add_subplot(grid[r, c]) for r, c in [(0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]]
+    cells = [(0, 1), (0, 2), (0, 3), (1, 0), (1, 1), (1, 2), (1, 3)]
+    panels = [fig.add_subplot(grid[r, c]) for r, c in cells]
     draw_explained_variance(panels[0], cumulative, color)
     draw_trajectories(panels[1], pca_result)
-    image = draw_session_similarity(panels[2], similarity)
-    fig.colorbar(image, ax=panels[2], label="z vs. shuffled null", shrink=0.85)
-    draw_distance_vs_lag(panels[3], similarity, drift, color)
-    draw_endpoints(panels[4], endpoints, color)
+    draw_velocity(panels[2], velocity, color)
+    image = draw_session_similarity(panels[3], similarity)
+    fig.colorbar(image, ax=panels[3], label="z vs. shuffled null", shrink=0.85)
+    draw_distance_vs_lag(panels[4], similarity, drift, color)
+    draw_endpoints(panels[5], endpoints, color)
+    draw_early_late(panels[6], velocity, color)
 
     titles = [
         (ax_raster, f"A  Example unit {unit}"),
         (panels[0], "B  Dimensionality"),
         (panels[1], "C  Population trajectories"),
-        (panels[2], "D  Session similarity"),
-        (panels[3], "E  Drift across sessions"),
-        (panels[4], "F  Endpoints (3 s)"),
+        (panels[2], "D  Trajectory speed"),
+        (panels[3], "E  Session similarity"),
+        (panels[4], "F  Drift across sessions"),
+        (panels[5], "G  Endpoints (3 s)"),
+        (panels[6], "H  Early vs. late speed"),
     ]
     for ax, title in titles:
         ax.set_title(title, loc="left", fontsize=11, fontweight="bold")
@@ -257,6 +290,8 @@ def plot_distance_vs_lag(results_by_taste: dict, drift_by_taste: dict) -> Figure
     for ax, taste in zip(axes[0], tastes):
         draw_distance_vs_lag(ax, results_by_taste[taste], drift_by_taste[taste], colors[taste])
         ax.set_title(taste)
+    for ax in axes[0][1:]:
+        ax.set_ylabel("")
     fig.tight_layout()
     return fig
 
@@ -269,5 +304,39 @@ def plot_endpoints(results_by_taste: dict) -> Figure:
     for ax, taste in zip(axes[0], tastes):
         draw_endpoints(ax, results_by_taste[taste], colors[taste])
         ax.set_title(taste)
+    fig.tight_layout()
+    return fig
+
+
+def plot_velocity(results_by_taste: dict) -> Figure:
+    """Trajectory speed over time, one panel per taste (early and late windows shaded)."""
+    tastes = list(results_by_taste)
+    colors = taste_colors(tastes)
+    fig, axes = plt.subplots(1, len(tastes), figsize=(3.8 * len(tastes), 3.4), squeeze=False, sharey=True)
+    for ax, taste in zip(axes[0], tastes):
+        draw_velocity(ax, results_by_taste[taste], colors[taste])
+        ax.set_title(taste)
+    for ax in axes[0][1:]:
+        ax.set_ylabel("")
+    fig.tight_layout()
+    return fig
+
+
+def plot_early_late(results_by_taste: dict, anova=None) -> Figure:
+    """Early vs. late speed per session, one panel per taste; optionally the ANOVA table as a footnote."""
+    tastes = list(results_by_taste)
+    colors = taste_colors(tastes)
+    fig, axes = plt.subplots(1, len(tastes), figsize=(3.2 * len(tastes), 3.4), squeeze=False, sharey=True)
+    for ax, taste in zip(axes[0], tastes):
+        draw_early_late(ax, results_by_taste[taste], colors[taste])
+        ax.set_title(taste)
+    for ax in axes[0][1:]:
+        ax.set_ylabel("")
+    if anova is not None:
+        text = "Repeated-measures ANOVA: " + "; ".join(
+            f"{effect} F({row['Num DF']:.0f}, {row['Den DF']:.0f}) = {row['F Value']:.1f}, {format_p(row['Pr > F'])}"
+            for effect, row in anova.iterrows()
+        )
+        fig.text(0.5, -0.02, text, ha="center", va="top", fontsize=8)
     fig.tight_layout()
     return fig

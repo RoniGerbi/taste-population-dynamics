@@ -22,7 +22,8 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from scipy.stats import f_oneway, false_discovery_control, ttest_rel
+from scipy.stats import f_oneway, ttest_rel
+from statsmodels.stats.multitest import multipletests
 
 from taste_dynamics.preprocessing import window_rates
 from taste_dynamics.synthetic import Dataset
@@ -31,10 +32,10 @@ CORRECTIONS = (None, "bonferroni", "fdr_bh")
 
 
 def adjust_pvalues(p_values: np.ndarray, correction: str | None) -> np.ndarray:
-    """Adjust p-values for multiple comparisons.
+    """Adjust p-values for multiple comparisons (``statsmodels.stats.multitest.multipletests``).
 
     NaN p-values (units that could not be tested) stay NaN and are not
-    counted as tests.
+    counted as tests; ``multipletests`` itself does not accept NaN.
     """
     if correction not in CORRECTIONS:
         raise ValueError(f"correction must be one of {CORRECTIONS}, got {correction!r}")
@@ -43,10 +44,7 @@ def adjust_pvalues(p_values: np.ndarray, correction: str | None) -> np.ndarray:
     valid = ~np.isnan(p)
     if correction is None or not valid.any():
         return adjusted
-    if correction == "bonferroni":
-        adjusted[valid] = np.minimum(p[valid] * valid.sum(), 1.0)
-    else:
-        adjusted[valid] = false_discovery_control(p[valid], method="bh")
+    adjusted[valid] = multipletests(p[valid], method=correction)[1]
     return adjusted
 
 
