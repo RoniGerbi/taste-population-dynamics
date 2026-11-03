@@ -1,10 +1,18 @@
-"""Run the pipeline on synthetic data and save the README figures to ./figures.
+"""Run the whole pipeline on simulated data and save one figure per analysis (all tastes).
 
 Usage (from the repository root, with the virtual environment active):
 
     python scripts/demo.py
     python scripts/demo.py --seed 3 --out figures_seed3
-    python scripts/demo.py --normalize zscore --out figures_zscore
+    python scripts/demo.py --normalize soft --out figures_soft
+
+Figures (in ./figures by default):
+    raster_psth.png          two example responsive units (shown in the README)
+    explained_variance.png   cumulative explained variance per taste
+    pca_trajectories.png     PC1-PC2 trajectories per taste
+    session_similarity.png   session-pair distances vs. shuffled null per taste
+    distance_vs_lag.png      distance vs. sessions apart (Mantel test) per taste
+    endpoints.png            session endpoints vs. shuffled null per taste
 """
 
 import argparse
@@ -39,48 +47,50 @@ def main() -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
+    def save(fig, name: str) -> None:
+        fig.savefig(out / name, dpi=150, bbox_inches="tight")
+
+    # 1. Data
     ds = make_dataset(seed=args.seed)
 
-    # Unit screening
+    # 2. Unit screening
     responsive = find_responsive_units(ds, correction="fdr_bh")
     specific = find_taste_specific_units(ds, correction="fdr_bh")
-    n = len(responsive)
-    print(f"Responsive units:     {responsive['responsive'].sum()} / {n}")
-    print(f"Taste-specific units: {specific['specific'].sum()} / {n}")
+    print(f"Responsive units: {responsive['responsive'].sum()} / {len(responsive)}")
+    print(f"Taste-specific units: {specific['specific'].sum()} / {len(specific)}")
 
-    # Example units: the three most taste-specific responsive units
+    # Example units: the two most taste-specific responsive units
     candidates = specific[responsive["responsive"] & specific["specific"]]
-    examples = candidates.sort_values("F", ascending=False).index[:3].tolist()
-    plot_raster_psth(ds, examples, session=0).savefig(out / "raster_psth.png", dpi=150)
+    examples = candidates.sort_values("F", ascending=False).index[:2].tolist()
+    save(plot_raster_psth(ds, examples, session=0), "raster_psth.png")
 
-    # Population analysis, one PCA per taste
+    # 3. Population analysis, one PCA per taste
     tensors = {taste: population_tensor(ds, taste)[0] for taste in ds.tastes}
     cumulative = {
         taste: cumulative_explained_variance(t, max_components=8, normalize=args.normalize)
         for taste, t in tensors.items()
     }
-    plot_explained_variance(cumulative).savefig(out / "explained_variance.png", dpi=150)
+    pca = {taste: pca_trajectories(t, n_components=4, normalize=args.normalize) for taste, t in tensors.items()}
+    save(plot_explained_variance(cumulative), "explained_variance.png")
+    save(plot_trajectories(pca), "pca_trajectories.png")
 
-    results = {taste: pca_trajectories(t, n_components=4, normalize=args.normalize) for taste, t in tensors.items()}
-    plot_trajectories(results).savefig(out / "pca_trajectories.png", dpi=150, bbox_inches="tight")
-    for taste, r in results.items():
-        print(f"{taste:12s} variance explained by 4 PCs: {r.explained_variance_ratio.sum():.0%}")
-
-    # Stability across sessions
+    # 4. Stability across sessions
     similarity = {taste: session_similarity_test(t, correction="fdr_bh") for taste, t in tensors.items()}
+    drift = {taste: drift_test(r.observed) for taste, r in similarity.items()}
     endpoints = {
         taste: endpoint_test(t, n_components=4, normalize=args.normalize, correction="fdr_bh")
         for taste, t in tensors.items()
     }
-    drift = {taste: drift_test(r.observed) for taste, r in similarity.items()}
-    plot_session_similarity(similarity).savefig(out / "session_similarity.png", dpi=150, bbox_inches="tight")
-    plot_endpoints(endpoints).savefig(out / "endpoints.png", dpi=150)
-    plot_distance_vs_lag(similarity, drift).savefig(out / "distance_vs_lag.png", dpi=150)
+    save(plot_session_similarity(similarity), "session_similarity.png")
+    save(plot_distance_vs_lag(similarity, drift), "distance_vs_lag.png")
+    save(plot_endpoints(endpoints), "endpoints.png")
+
     for taste in tensors:
-        s, e, d = similarity[taste], endpoints[taste], drift[taste]
+        s, d, e = similarity[taste], drift[taste], endpoints[taste]
         print(
-            f"{taste:12s} similar pairs {s.n_significant()}/{len(s.pairs)} | endpoints closer than chance: "
-            f"{format_p(e.overall['p'])} | drift: r = {d['r']:.2f}, {format_p(d['p'])}"
+            f"{taste:12s} 4 PCs: {pca[taste].explained_variance_ratio.sum():.0%} | "
+            f"similar pairs {s.n_significant()}/{len(s.pairs)} | "
+            f"drift r = {d['r']:.2f}, {format_p(d['p'])} | endpoints {format_p(e.overall['p'])}"
         )
     print(f"Figures saved to {out}/")
 

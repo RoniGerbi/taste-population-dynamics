@@ -47,3 +47,19 @@ def test_stability_figures(ds, tmp_path):
         fig.savefig(tmp_path / f"{name}.png")
         plt.close(fig)
     assert format_p(0.0004) == "p < 0.001" and format_p(0.0162) == "p = 0.016"
+
+
+def test_overview(ds, tmp_path):
+    from taste_dynamics.plotting import plot_overview
+    from taste_dynamics.stability import drift_test, endpoint_test, session_similarity_test
+
+    tensor = population_tensor(ds, "water")[0]
+    sim = session_similarity_test(tensor, n_shuffles=20)
+    fig = plot_overview(
+        ds, "water", 0,
+        cumulative_explained_variance(tensor, 5), pca_trajectories(tensor, 3),
+        sim, drift_test(sim.observed), endpoint_test(tensor, n_components=2, n_shuffles=20),
+    )
+    assert len(fig.axes) == 8  # raster + PSTH + 5 panels + colorbar
+    fig.savefig(tmp_path / "overview.png")
+    plt.close(fig)
