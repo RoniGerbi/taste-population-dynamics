@@ -14,6 +14,10 @@ venv/
 .ipynb_checkpoints/
 .vscode/
 
+# Figures from scripts/demo.py: only the one shown in the README is committed
+figures/*
+!figures/raster_psth.png
+
 # Generated data (never commit data)
 data/
 *.npz
