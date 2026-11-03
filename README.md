@@ -13,7 +13,7 @@ Do populations of cortical neurons maintain a stable, trackable representation o
 | 3 | Unit screening: responsiveness and taste specificity | ✅ |
 | 4 | PCA trajectories and demo figures | ✅ |
 | 5a | Stability across sessions: session similarity, endpoints, drift | ✅ |
-| 5b | Trajectory velocity: early vs. late, repeated-measures ANOVA | ⏳ |
+| 5b | Trajectory velocity: early vs. late, repeated-measures ANOVA | ✅ |
 
 ## Pipeline
 
@@ -22,17 +22,21 @@ Do populations of cortical neurons maintain a stable, trackable representation o
 3. **Screen units:** taste responsiveness (paired t-test, 3 s before vs. after delivery) and taste specificity (one-way ANOVA across tastes), with optional FDR or Bonferroni correction (`screening`).
 4. **Reduce dimensions:** PCA fitted on all sessions together, giving one trajectory per session in a shared space; units can optionally be z-scored or soft-normalized first (`dynamics`).
 5. **Test stability across sessions:** distances between sessions' population responses and between their endpoints, each against a shuffled null, plus a Mantel test of whether sessions drift apart over time (`stability`).
-6. *Planned:* trajectory velocity, early vs. late in the response, with a repeated-measures ANOVA.
+6. **Measure trajectory speed:** speed through PC space early vs. late in the response, compared within sessions (paired t-test) and across tastes (repeated-measures ANOVA, sessions as subjects), plus a shuffled null (`velocity`).
 
-Notes: time windows include their start and exclude their end; shuffle-test p-values are computed from the shuffle distribution and are seeded; soft normalization follows Churchland et al. (2012).
+Notes: time windows include their start and exclude their end; shuffle-test p-values are computed from the shuffle distribution and are seeded; shuffling time bins removes the smoothing of the PSTHs, so shuffled trajectories are almost always faster and the within-session comparison is the informative velocity test; soft normalization follows Churchland et al. (2012).
 
 ## Example output
 
-The pipeline was built for, and applied to, multi-session Neuropixels recordings. Those recordings are unpublished and not included here. The figure below is produced from **simulated data**; it demonstrates the analyses and is not a finding.
+The pipeline was built for, and applied to, multi-session Neuropixels recordings. Those recordings are unpublished and not included here. The figures below are produced from **simulated data**; they demonstrate the analyses and are not findings.
 
 ![Rasters and PSTHs of two example units](figures/raster_psth.png)
 
-Rasters (top; trials grouped by taste) and PSTHs (bottom) of two taste-responsive units. An overview of the population analyses for one taste will be added together with the velocity analysis.
+Rasters (top; trials grouped by taste) and PSTHs (bottom) of two taste-responsive units.
+
+![Overview of all analyses for water](figures/overview_water.png)
+
+All analyses for one taste (water). **A** Raster and PSTH of one unit. **B** Cumulative variance explained by PCA. **C** Each session's trajectory in the first two PCs (circle: delivery; triangle: 3 s later). **D** Trajectory speed over time (mean ± SEM across sessions; shaded: early and late windows). **E** Distance between every pair of sessions as a z-score against a bin-shuffled null (`*`: FDR-corrected p < 0.05). **F** Distance between sessions against the number of sessions between them (Mantel test). **G** Session endpoints against endpoints from shuffled data. **H** Early vs. late speed of each session (paired t-test).
 
 ## Synthetic data
 
@@ -48,17 +52,17 @@ Ground truth is returned in `dataset.truth`, so tests can check whether each ana
 
 **Not modelled:** refractory periods, noise correlations between units, trial-to-trial variability beyond Poisson, response latency, temporal modulation in non-responsive units, and abrupt changes between sessions.
 
-## Installation and use (Windows, Anaconda Prompt)
+## Installation and use
 
-```bat
+```bash
 python -m venv .venv
-.venv\Scripts\activate
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-python scripts\demo.py
+python scripts/demo.py
 pytest
 ```
 
-`demo.py` runs the whole pipeline on simulated data and saves one figure per analysis, each with all three tastes, to `figures/` (`--normalize soft` changes the PCA input). Only the figure above is committed to the repository.
+`demo.py` runs the whole pipeline on simulated data and saves one figure per analysis, each with all three tastes, to `figures/` (`--normalize soft` changes the PCA input). Only the two figures above are committed to the repository.
 
 ## Data format
 
@@ -71,10 +75,10 @@ All times are in seconds.
 
 ## Repository layout
 
-- `src/taste_dynamics/`: the package, one module per pipeline step (`io`, `preprocessing`, `screening`, `dynamics`, `stability`), plus `synthetic` (simulated data) and `plotting`
+- `src/taste_dynamics/`: the package, one module per pipeline step (`io`, `preprocessing`, `screening`, `dynamics`, `stability`, `velocity`), plus `synthetic` (simulated data) and `plotting`
 - `scripts/`: `demo.py` (runs the pipeline and saves the figures) and `make_synthetic_data.py` (writes a simulated dataset to disk)
 - `tests/`: pytest suite, run automatically by GitHub Actions on every pull request
-- `figures/`: the README figure; `demo.py` writes its other figures here too (not committed)
+- `figures/`: the README figures; `demo.py` writes its other figures here too (not committed)
 
 ## References
 

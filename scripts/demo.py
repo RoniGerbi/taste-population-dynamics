@@ -13,6 +13,9 @@ Figures (in ./figures by default):
     session_similarity.png   session-pair distances vs. shuffled null per taste
     distance_vs_lag.png      distance vs. sessions apart (Mantel test) per taste
     endpoints.png            session endpoints vs. shuffled null per taste
+    velocity.png             trajectory speed over time per taste
+    early_late.png           early vs. late speed per taste, with the repeated-measures ANOVA
+    overview_water.png       all analyses for water (shown in the README)
 """
 
 import argparse
@@ -27,15 +30,22 @@ from taste_dynamics.dynamics import cumulative_explained_variance, pca_trajector
 from taste_dynamics.plotting import (  # noqa: E402
     format_p,
     plot_distance_vs_lag,
+    plot_early_late,
     plot_endpoints,
     plot_explained_variance,
+    plot_overview,
     plot_raster_psth,
     plot_session_similarity,
     plot_trajectories,
+    plot_velocity,
+    taste_colors,
 )
 from taste_dynamics.preprocessing import population_tensor  # noqa: E402
 from taste_dynamics.screening import find_responsive_units, find_taste_specific_units  # noqa: E402
 from taste_dynamics.stability import drift_test, endpoint_test, session_similarity_test  # noqa: E402
+from taste_dynamics.velocity import velocity_anova, velocity_test  # noqa: E402
+
+OVERVIEW_TASTE = "water"
 
 
 def main() -> None:
@@ -85,14 +95,35 @@ def main() -> None:
     save(plot_distance_vs_lag(similarity, drift), "distance_vs_lag.png")
     save(plot_endpoints(endpoints), "endpoints.png")
 
+    # 5. Trajectory speed: early vs. late
+    velocity = {
+        taste: velocity_test(t, n_components=4, normalize=args.normalize) for taste, t in tensors.items()
+    }
+    anova = velocity_anova(velocity)
+    save(plot_velocity(velocity), "velocity.png")
+    save(plot_early_late(velocity, anova), "early_late.png")
+
+    # One-taste overview of all analyses
+    responsive_units = responsive.index[responsive["responsive"]]
+    gain = specific.loc[responsive_units, f"{OVERVIEW_TASTE}_hz"] - responsive.loc[responsive_units, "baseline_hz"]
+    overview = plot_overview(
+        ds, OVERVIEW_TASTE, int(gain.idxmax()), cumulative[OVERVIEW_TASTE], pca[OVERVIEW_TASTE],
+        similarity[OVERVIEW_TASTE], drift[OVERVIEW_TASTE], endpoints[OVERVIEW_TASTE], velocity[OVERVIEW_TASTE],
+        color=taste_colors(ds.tastes)[OVERVIEW_TASTE],
+    )
+    overview.savefig(out / f"overview_{OVERVIEW_TASTE}.png", dpi=130, bbox_inches="tight")
+
     for taste in tensors:
-        s, d, e = similarity[taste], drift[taste], endpoints[taste]
+        s, d, e, v = similarity[taste], drift[taste], endpoints[taste], velocity[taste]
         print(
             f"{taste:12s} 4 PCs: {pca[taste].explained_variance_ratio.sum():.0%} | "
             f"similar pairs {s.n_significant()}/{len(s.pairs)} | "
-            f"drift r = {d['r']:.2f}, {format_p(d['p'])} | endpoints {format_p(e.overall['p'])}"
+            f"drift r = {d['r']:.2f}, {format_p(d['p'])} | endpoints {format_p(e.overall['p'])} | "
+            f"speed early {v.early.mean():.0f} vs. late {v.late.mean():.0f}, {format_p(v.paired_p)}"
         )
-    print(f"Figures saved to {out}/")
+    print("\nRepeated-measures ANOVA of speed (sessions as subjects):")
+    print(anova.round(4).to_string())
+    print(f"\nFigures saved to {out}/")
 
 
 if __name__ == "__main__":

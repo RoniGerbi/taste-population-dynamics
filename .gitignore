@@ -17,6 +17,7 @@ venv/
 # Figures from scripts/demo.py: only the one shown in the README is committed
 figures/*
 !figures/raster_psth.png
+!figures/overview_water.png
 
 # Generated data (never commit data)
 data/

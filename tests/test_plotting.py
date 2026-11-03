@@ -52,6 +52,7 @@ def test_stability_figures(ds, tmp_path):
 def test_overview(ds, tmp_path):
     from taste_dynamics.plotting import plot_overview
     from taste_dynamics.stability import drift_test, endpoint_test, session_similarity_test
+    from taste_dynamics.velocity import velocity_test
 
     tensor = population_tensor(ds, "water")[0]
     sim = session_similarity_test(tensor, n_shuffles=20)
@@ -59,7 +60,18 @@ def test_overview(ds, tmp_path):
         ds, "water", 0,
         cumulative_explained_variance(tensor, 5), pca_trajectories(tensor, 3),
         sim, drift_test(sim.observed), endpoint_test(tensor, n_components=2, n_shuffles=20),
+        velocity_test(tensor, n_components=2, n_shuffles=10),
     )
-    assert len(fig.axes) == 8  # raster + PSTH + 5 panels + colorbar
+    assert len(fig.axes) == 10  # raster + PSTH + 7 panels + colorbar
     fig.savefig(tmp_path / "overview.png")
     plt.close(fig)
+
+
+def test_velocity_figures(ds, tmp_path):
+    from taste_dynamics.plotting import plot_early_late, plot_velocity
+    from taste_dynamics.velocity import velocity_test
+
+    results = {t: velocity_test(population_tensor(ds, t)[0], n_components=2, n_shuffles=10) for t in ds.tastes}
+    for name, fig in {"vel": plot_velocity(results), "el": plot_early_late(results)}.items():
+        fig.savefig(tmp_path / f"{name}.png")
+        plt.close(fig)
