@@ -1,6 +1,6 @@
 # taste-population-dynamics
 
-Do cortical neuron populations keep a stable, trackable representation of a taste across repeated sessions without any learning? This repository contains the analysis pipeline from a computational-neuroscience course project that addressed that question with multi-session taste-delivery recordings. It covers spike alignment, PSTHs, unit screening, PCA trajectories, and tests of stability across sessions.
+Do populations of cortical neurons maintain a stable, trackable representation of a taste across repeated sessions? This repository contains the analysis pipeline from a computational neuroscience course project (Sagol School of Neuroscience, Tel Aviv University) that addressed this question using multi-session recordings from the gustatory cortex of a rat during taste delivery. The pipeline covers spike alignment, PSTHs, unit screening, PCA trajectories, and several tests of stability across sessions.
 
 > **No real data is included.** The pipeline was developed for real recordings, which remain unpublished. A synthetic data generator that reproduces the experimental design stands in for them: it produces the example figures and lets the tests check each step against a known ground truth.
 
