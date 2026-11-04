@@ -21,7 +21,7 @@ Do populations of cortical neurons maintain a stable, trackable representation o
 2. **Preprocess:** align spikes to each delivery, bin (100 ms) and smooth (Gaussian, σ = 150 ms) into PSTHs, and stack them into a sessions × time bins × units array for each taste (`preprocessing`).
 3. **Screen units:** taste responsiveness (paired t-test, 3 s before vs. after delivery) and taste specificity (one-way ANOVA across tastes), with optional FDR or Bonferroni correction (`screening`).
 4. **Reduce dimensions:** PCA fitted on all sessions together, giving one trajectory per session in a shared space; units can optionally be z-scored or soft-normalized first (`dynamics`).
-5. **Test stability across sessions:** distances between sessions' population responses and between their endpoints, each against a shuffled null, plus a Mantel test of whether sessions drift apart over time (`stability`).
+5. **Compare sessions:** whether sessions share a time-locked response (distances between sessions against a null with each session's time bins shuffled), whether they end in similar states (endpoint distances against a shuffled null), and whether they drift apart over time (Mantel test) (`stability`).
 6. **Measure trajectory speed:** speed through PC space early vs. late in the response, compared within sessions (paired t-test) and across tastes (repeated-measures ANOVA, sessions as subjects), plus a shuffled null (`velocity`).
 
 Notes: time windows include their start and exclude their end; shuffle-test p-values are computed from the shuffle distribution and are seeded; shuffling time bins removes the smoothing of the PSTHs, so shuffled trajectories are almost always faster and the within-session comparison is the informative velocity test; soft normalization follows Churchland et al. (2012).
@@ -34,9 +34,9 @@ The pipeline was built for, and applied to, multi-session Neuropixels recordings
 
 Rasters (top; trials grouped by taste) and PSTHs (bottom) of two taste-responsive units.
 
-![Overview of all analyses for water](figures/overview_water.png)
+![Population analyses for water](figures/overview_water.png)
 
-All analyses for one taste (water). **A** Raster and PSTH of one unit. **B** Cumulative variance explained by PCA. **C** Each session's trajectory in the first two PCs (circle: delivery; triangle: 3 s later). **D** Trajectory speed over time (mean ± SEM across sessions; shaded: early and late windows). **E** Distance between every pair of sessions as a z-score against a bin-shuffled null (`*`: FDR-corrected p < 0.05). **F** Distance between sessions against the number of sessions between them (Mantel test). **G** Session endpoints against endpoints from shuffled data. **H** Early vs. late speed of each session (paired t-test).
+Population analyses for one taste (water). **A** Each session's trajectory in the first two PCs (circle: delivery; triangle: 3 s later). **B** Left: distance between every pair of sessions as a z-score against a null in which each unit's time bins are shuffled within each session (`*`: FDR-corrected p < 0.05). Right: drift (Mantel test): Spearman correlation between the distance of each session pair and the number of sessions between them, for the real session order (colored line) and for all 5,040 orders of the 7 sessions (gray). **C** Session endpoints against endpoints from shuffled data. **D** Trajectory speed over time (mean ± SEM across sessions); diamonds show the mean speed in the shaded early and late windows (± SEM), compared with a paired t-test.
 
 ## Synthetic data
 

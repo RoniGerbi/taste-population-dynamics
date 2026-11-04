@@ -32,7 +32,13 @@ def test_explained_variance_and_trajectories(ds, tmp_path):
 
 
 def test_stability_figures(ds, tmp_path):
-    from taste_dynamics.plotting import format_p, plot_distance_vs_lag, plot_endpoints, plot_session_similarity
+    from taste_dynamics.plotting import (
+        format_p,
+        plot_distance_vs_lag,
+        plot_drift,
+        plot_endpoints,
+        plot_session_similarity,
+    )
     from taste_dynamics.stability import drift_test, endpoint_test, session_similarity_test
 
     tensors = {t: population_tensor(ds, t)[0] for t in ds.tastes}
@@ -42,7 +48,8 @@ def test_stability_figures(ds, tmp_path):
     for name, fig in {
         "sim": plot_session_similarity(sim),
         "ends": plot_endpoints(ends),
-        "lag": plot_distance_vs_lag(sim, drift),
+        "lag": plot_distance_vs_lag(sim),
+        "drift": plot_drift(drift),
     }.items():
         fig.savefig(tmp_path / f"{name}.png")
         plt.close(fig)
@@ -57,14 +64,21 @@ def test_overview(ds, tmp_path):
     tensor = population_tensor(ds, "water")[0]
     sim = session_similarity_test(tensor, n_shuffles=20)
     fig = plot_overview(
-        ds, "water", 0,
-        cumulative_explained_variance(tensor, 5), pca_trajectories(tensor, 3),
-        sim, drift_test(sim.observed), endpoint_test(tensor, n_components=2, n_shuffles=20),
-        velocity_test(tensor, n_components=2, n_shuffles=10),
+        "water", pca_trajectories(tensor, 3), sim, drift_test(sim.observed),
+        endpoint_test(tensor, n_components=2, n_shuffles=20), velocity_test(tensor, n_components=2, n_shuffles=10),
     )
-    assert len(fig.axes) == 10  # raster + PSTH + 7 panels + colorbar
+    assert len(fig.axes) == 6  # A, B (heatmap + drift), C, D, + colorbar
     fig.savefig(tmp_path / "overview.png")
     plt.close(fig)
+
+
+def test_fixed_taste_colors():
+    from taste_dynamics.plotting import taste_colors
+
+    colors = taste_colors(["nacl", "sucrose", "water", "citric_acid", "quinine"])
+    assert colors["water"] == "#3b75af" and colors["nacl"] == "#e1a33b" and colors["citric_acid"] == "#c44e52"
+    assert colors["sucrose"] != colors["quinine"]  # unknown tastes still get distinct colors
+    assert taste_colors(["water"]) == {"water": "#3b75af"}  # independent of order or of other tastes
 
 
 def test_velocity_figures(ds, tmp_path):
