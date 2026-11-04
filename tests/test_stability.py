@@ -9,7 +9,7 @@ from taste_dynamics.stability import (
     pairwise_distances,
     permutation_pvalue,
     session_similarity_test,
-    shuffle_bins_per_unit,
+    shuffle_bins_within_sessions,
     shuffle_population_vectors,
 )
 
@@ -38,10 +38,12 @@ def test_pairwise_distances():
 def test_shuffles_keep_values():
     rng = np.random.default_rng(0)
     tensor = rng.normal(size=(3, 5, 4))
-    by_unit = shuffle_bins_per_unit(tensor, rng)
-    assert by_unit.shape == tensor.shape
-    for u in range(4):  # each unit keeps its own values, only their order changes
-        np.testing.assert_allclose(np.sort(by_unit[..., u].ravel()), np.sort(tensor[..., u].ravel()))
+    within = shuffle_bins_within_sessions(tensor, rng)
+    assert within.shape == tensor.shape
+    for s in range(3):  # each unit keeps its own values within each session; only their order changes
+        for u in range(4):
+            np.testing.assert_allclose(np.sort(within[s, :, u]), np.sort(tensor[s, :, u]))
+    assert not np.array_equal(within, tensor)
     rows = shuffle_population_vectors(tensor, rng)
     original = {tuple(r) for r in tensor.reshape(-1, 4)}
     assert {tuple(r) for r in rows.reshape(-1, 4)} == original  # whole population vectors move together
@@ -53,6 +55,7 @@ def test_drift_test_exact():
     result = drift_test(lag)
     assert result["r"] == pytest.approx(1.0)
     assert result["n_permutations"] == 720  # 6! orderings, enumerated
+    assert result["null"].shape == (720,)
     assert result["p"] < 0.01
     # constant distances: no relation to lag
     flat = drift_test(np.ones((6, 6)) - np.eye(6))
@@ -74,7 +77,7 @@ def test_session_similarity(tensor_default):
     result = session_similarity_test(tensor_default, n_shuffles=200)
     assert len(result.pairs) == 21 and result.null.shape == (200, 7, 7)
     assert set(result.pairs.columns) >= {"session_a", "session_b", "lag", "observed", "z", "p", "p_adj"}
-    # sessions share the time course, so they are far more similar than the bin-shuffled null
+    # sessions share the time course, so they are far more similar than the within-session shuffle
     assert result.n_significant() == 21
     assert result.overall["observed_mean"] < result.overall["null_mean"]
     # same seed -> same p-values
@@ -96,3 +99,4 @@ def test_drift_detected_only_when_present(drift, expect_drift):
         assert result["r"] > 0.7 and result["p"] < 0.01
     else:
         assert result["p"] > 0.05
+

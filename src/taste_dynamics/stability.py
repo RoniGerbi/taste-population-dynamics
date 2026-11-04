@@ -2,11 +2,12 @@
 
 Three tests, all on one taste's population tensor (sessions x bins x units):
 
-* :func:`session_similarity_test` - Euclidean distance between every pair of
-  sessions' population responses, compared with a null in which each unit's
-  values are shuffled across all time bins and sessions. This null destroys the
-  shared time course, so it asks "do sessions share a time-locked response?",
-  not "is the response stable over time?".
+* :func:`session_similarity_test` - do sessions share a time-locked response?
+  Euclidean distance between every pair of sessions' population responses,
+  compared with a null in which each unit's time bins are shuffled within each
+  session (independently per unit and session). The null keeps each session's
+  own values but scrambles their time course. It does not test whether the
+  response is stable over time; :func:`drift_test` does.
 * :func:`endpoint_test` - distance between sessions' final states in PCA space,
   compared with a null in which population vectors (rows) are shuffled before PCA.
   Asks whether sessions end in a more similar state than chance.
@@ -74,10 +75,13 @@ def pairwise_distances(points: np.ndarray) -> np.ndarray:
     return np.sqrt(np.sum(diff**2, axis=-1))
 
 
-def shuffle_bins_per_unit(tensor: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-    """Shuffle each unit's values independently across all (session, bin) rows."""
-    tensor = np.asarray(tensor)
-    return rng.permuted(flatten_sessions(tensor), axis=0).reshape(tensor.shape)
+def shuffle_bins_within_sessions(tensor: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """Shuffle each unit's time bins within each session, independently per unit and session.
+
+    Values never move between sessions: session ``s`` of unit ``u`` keeps its own
+    values in a random order.
+    """
+    return rng.permuted(np.asarray(tensor), axis=1)
 
 
 def shuffle_population_vectors(tensor: np.ndarray, rng: np.random.Generator) -> np.ndarray:
@@ -154,7 +158,7 @@ def session_similarity_test(
     correction: str | None = None,
     seed: int | None = 0,
 ) -> PairwiseTestResult:
-    """Distances between sessions' population responses vs. a bin-shuffled null.
+    """Distances between sessions' population responses vs. a within-session time-shuffled null.
 
     Parameters
     ----------
@@ -167,7 +171,7 @@ def session_similarity_test(
     rng = np.random.default_rng(seed)
     tensor = np.asarray(tensor, dtype=float)
     observed = pairwise_distances(tensor)
-    null = np.stack([pairwise_distances(shuffle_bins_per_unit(tensor, rng)) for _ in range(n_shuffles)])
+    null = np.stack([pairwise_distances(shuffle_bins_within_sessions(tensor, rng)) for _ in range(n_shuffles)])
     table = _pairs_table(observed, null, alternative, correction)
     return PairwiseTestResult(table, observed, null, _overall(observed, null, alternative))
 
@@ -214,7 +218,8 @@ def drift_test(distances: np.ndarray, n_permutations: int | None = None, seed: i
     ``n_permutations=None`` enumerates every ordering when there are at most
     8 sessions (exact test) and otherwise draws 10,000 random orderings.
 
-    Returns a dict with ``r`` (observed correlation), ``p`` and ``n_permutations``.
+    Returns a dict with ``r`` (observed correlation), ``p``, ``n_permutations`` and
+    ``null`` (the correlation for every permuted order, for plotting).
     If all distances are equal the correlation is undefined and ``r`` and ``p`` are NaN.
     """
     distances = np.asarray(distances, dtype=float)
@@ -223,7 +228,7 @@ def drift_test(distances: np.ndarray, n_permutations: int | None = None, seed: i
         raise ValueError("drift_test needs at least 3 sessions")
     a, b = np.triu_indices(n, k=1)
     if np.ptp(distances[a, b]) == 0:
-        return {"r": np.nan, "p": np.nan, "n_permutations": 0}
+        return {"r": np.nan, "p": np.nan, "n_permutations": 0, "null": np.array([])}
     dist_ranks = rankdata(distances[a, b])
 
     def spearman(order: np.ndarray) -> float:
@@ -241,4 +246,5 @@ def drift_test(distances: np.ndarray, n_permutations: int | None = None, seed: i
         n_used = 10_000 if n_permutations is None else n_permutations
         null = np.array([spearman(rng.permutation(n)) for _ in range(n_used)])
         p = float((np.sum(null >= r - 1e-12) + 1) / (n_used + 1))
-    return {"r": r, "p": p, "n_permutations": n_used}
+    return {"r": r, "p": p, "n_permutations": n_used, "null": null}
+

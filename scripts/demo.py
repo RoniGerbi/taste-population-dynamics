@@ -10,12 +10,13 @@ Figures (in ./figures by default):
     raster_psth.png          two example responsive units (shown in the README)
     explained_variance.png   cumulative explained variance per taste
     pca_trajectories.png     PC1-PC2 trajectories per taste
-    session_similarity.png   session-pair distances vs. shuffled null per taste
-    distance_vs_lag.png      distance vs. sessions apart (Mantel test) per taste
+    session_similarity.png   session-pair distances vs. within-session time-shuffled null per taste
+    distance_vs_lag.png      distance between session pairs vs. sessions apart per taste
+    drift.png                Mantel test: null distribution of Spearman r and real r per taste
     endpoints.png            session endpoints vs. shuffled null per taste
     velocity.png             trajectory speed over time per taste
     early_late.png           early vs. late speed per taste, with the repeated-measures ANOVA
-    overview_water.png       all analyses for water (shown in the README)
+    overview_water.png       population analyses for water (shown in the README)
 """
 
 import argparse
@@ -30,6 +31,7 @@ from taste_dynamics.dynamics import cumulative_explained_variance, pca_trajector
 from taste_dynamics.plotting import (  # noqa: E402
     format_p,
     plot_distance_vs_lag,
+    plot_drift,
     plot_early_late,
     plot_endpoints,
     plot_explained_variance,
@@ -38,7 +40,6 @@ from taste_dynamics.plotting import (  # noqa: E402
     plot_session_similarity,
     plot_trajectories,
     plot_velocity,
-    taste_colors,
 )
 from taste_dynamics.preprocessing import population_tensor  # noqa: E402
 from taste_dynamics.screening import find_responsive_units, find_taste_specific_units  # noqa: E402
@@ -92,7 +93,8 @@ def main() -> None:
         for taste, t in tensors.items()
     }
     save(plot_session_similarity(similarity), "session_similarity.png")
-    save(plot_distance_vs_lag(similarity, drift), "distance_vs_lag.png")
+    save(plot_distance_vs_lag(similarity), "distance_vs_lag.png")
+    save(plot_drift(drift), "drift.png")
     save(plot_endpoints(endpoints), "endpoints.png")
 
     # 5. Trajectory speed: early vs. late
@@ -103,13 +105,10 @@ def main() -> None:
     save(plot_velocity(velocity), "velocity.png")
     save(plot_early_late(velocity, anova), "early_late.png")
 
-    # One-taste overview of all analyses
-    responsive_units = responsive.index[responsive["responsive"]]
-    gain = specific.loc[responsive_units, f"{OVERVIEW_TASTE}_hz"] - responsive.loc[responsive_units, "baseline_hz"]
+    # One-taste overview of the population analyses
     overview = plot_overview(
-        ds, OVERVIEW_TASTE, int(gain.idxmax()), cumulative[OVERVIEW_TASTE], pca[OVERVIEW_TASTE],
-        similarity[OVERVIEW_TASTE], drift[OVERVIEW_TASTE], endpoints[OVERVIEW_TASTE], velocity[OVERVIEW_TASTE],
-        color=taste_colors(ds.tastes)[OVERVIEW_TASTE],
+        OVERVIEW_TASTE, pca[OVERVIEW_TASTE], similarity[OVERVIEW_TASTE], drift[OVERVIEW_TASTE],
+        endpoints[OVERVIEW_TASTE], velocity[OVERVIEW_TASTE],
     )
     overview.savefig(out / f"overview_{OVERVIEW_TASTE}.png", dpi=130, bbox_inches="tight")
 

@@ -1,6 +1,6 @@
 """Figures for every analysis step.
 
-* ``plot_overview`` - one figure, one taste, all analyses (shown in the README).
+* ``plot_overview`` - one figure, one taste, the population analyses (shown in the README).
 * ``plot_*`` - one figure per analysis, with a panel per taste.
 
 Each figure is built from small ``draw_*`` functions that draw into a given
@@ -19,7 +19,8 @@ from taste_dynamics.dynamics import PCAResult
 from taste_dynamics.preprocessing import align_spikes, psth
 from taste_dynamics.synthetic import Dataset
 
-TASTE_COLORS = ("#3b75af", "#e1a33b", "#c44e52", "#55a868", "#8172b3")
+TASTE_COLOR_MAP = {"water": "#3b75af", "nacl": "#e1a33b", "citric_acid": "#c44e52"}  # blue, gold, red
+OTHER_COLORS = ("#55a868", "#8172b3", "#937860", "#da8bc3")  # for any other taste names
 
 
 def format_p(p: float) -> str:
@@ -28,8 +29,19 @@ def format_p(p: float) -> str:
 
 
 def taste_colors(tastes: list[str]) -> dict[str, str]:
-    """A fixed color for each taste, in order."""
-    return {taste: TASTE_COLORS[i % len(TASTE_COLORS)] for i, taste in enumerate(tastes)}
+    """The same color for a taste in every figure: water blue, NaCl gold, citric acid red.
+
+    Other taste names get colors from ``OTHER_COLORS``, in order.
+    """
+    others = iter(OTHER_COLORS * (len(tastes) // len(OTHER_COLORS) + 1))
+    return {taste: TASTE_COLOR_MAP.get(taste) or next(others) for taste in tastes}
+
+
+def ordered_tastes(tastes) -> list[str]:
+    """Water, NaCl, citric acid first (in that order), then any other tastes as given."""
+    tastes = list(tastes)
+    known = [t for t in TASTE_COLOR_MAP if t in tastes]
+    return known + [t for t in tastes if t not in TASTE_COLOR_MAP]
 
 
 def _clean(ax: Axes) -> None:
@@ -116,16 +128,24 @@ def draw_session_similarity(ax: Axes, result, zmax: float | None = None, alpha: 
     return image
 
 
-def draw_distance_vs_lag(ax: Axes, result, drift: dict, color: str) -> None:
-    """Distance between sessions against sessions apart, with the Mantel test result."""
+def draw_distance_vs_lag(ax: Axes, result, color: str) -> None:
+    """Distance between each pair of sessions against the number of sessions between them."""
     pairs = result.pairs
     ax.scatter(pairs["lag"], pairs["observed"], color=color, s=16)
-    means = pairs.groupby("lag")["observed"].mean()
-    ax.plot(means.index, means.values, color=color, linewidth=1)
+    ax.set_xticks(np.arange(1, result.observed.shape[0]))
     ax.set_xlabel("Sessions apart")
     ax.set_ylabel("Distance between sessions")
-    ax.text(0.03, 0.97, f"Spearman r = {drift['r']:.2f}\n{format_p(drift['p'])}", transform=ax.transAxes,
+    _clean(ax)
+
+
+def draw_drift_null(ax: Axes, drift: dict, color: str) -> None:
+    """Mantel test: Spearman r for every session order (gray) and for the real order (colored line)."""
+    ax.hist(drift["null"], bins=40, color="0.75", edgecolor="none")
+    ax.axvline(drift["r"], color=color, linewidth=2)
+    ax.text(0.03, 0.97, f"real r = {drift['r']:.2f}\n{format_p(drift['p'])}", transform=ax.transAxes,
             va="top", fontsize=8)
+    ax.set_xlabel("Spearman r (distance vs. sessions apart)")
+    ax.set_ylabel("Session orders")
     _clean(ax)
 
 
@@ -143,8 +163,12 @@ def draw_endpoints(ax: Axes, result, color: str) -> None:
     _clean(ax)
 
 
-def draw_velocity(ax: Axes, result, color: str, fraction: float = 0.2) -> None:
-    """Mean trajectory speed over time (± SEM across sessions), with the early and late windows shaded."""
+def draw_velocity(ax: Axes, result, color: str, fraction: float = 0.2, show_early_late: bool = True) -> None:
+    """Mean trajectory speed over time (± SEM across sessions), early and late windows shaded.
+
+    With ``show_early_late``, each window also gets a marker for its mean speed
+    across sessions (± SEM) and the paired t-test of early vs. late.
+    """
     mean = result.speed.mean(axis=0)
     sem = result.speed.std(axis=0, ddof=1) / np.sqrt(result.speed.shape[0])
     t = result.step_times
@@ -153,6 +177,13 @@ def draw_velocity(ax: Axes, result, color: str, fraction: float = 0.2) -> None:
     ax.axvspan(t[-n], t[-1], color="0.9", zorder=0)
     ax.fill_between(t, mean - sem, mean + sem, color=color, alpha=0.25, linewidth=0)
     ax.plot(t, mean, color=color)
+    if show_early_late:
+        n_sessions = len(result.early)
+        for window, values in ((t[:n], result.early), (t[-n:], result.late)):
+            ax.errorbar(window.mean(), values.mean(), yerr=values.std(ddof=1) / np.sqrt(n_sessions), fmt="D",
+                        color="black", markerfacecolor="white", markersize=6, capsize=4, zorder=5)
+        ax.text(0.97, 0.97, f"early vs. late: paired t = {result.paired_t:.1f}, {format_p(result.paired_p)}",
+                transform=ax.transAxes, ha="right", va="top", fontsize=8)
     ax.set_xlabel("Time from delivery (s)")
     ax.set_ylabel("Speed (PC units/s)")
     _clean(ax)
@@ -174,48 +205,41 @@ def draw_early_late(ax: Axes, result, color: str) -> None:
 
 
 def plot_overview(
-    dataset: Dataset,
     taste: str,
-    unit: int,
-    cumulative: np.ndarray,
     pca_result: PCAResult,
     similarity,
     drift: dict,
     endpoints,
     velocity,
-    color: str = TASTE_COLORS[0],
+    color: str | None = None,
 ) -> Figure:
-    """All analyses for one taste in a single figure (panels A-H)."""
-    fig = plt.figure(figsize=(17, 7.6))
-    grid = fig.add_gridspec(2, 4, hspace=0.45, wspace=0.38)
-    raster_psth = grid[0, 0].subgridspec(2, 1, height_ratios=[1.2, 1], hspace=0.08)
-    ax_raster, ax_psth = fig.add_subplot(raster_psth[0]), fig.add_subplot(raster_psth[1])
-    draw_raster_psth(ax_raster, ax_psth, dataset, unit, [taste], {taste: color})
-    ax_raster.set_ylabel("Trials")
-    ax_psth.set_ylabel("Spikes/s")
+    """Population analyses for one taste in a 2 x 2 figure.
 
-    cells = [(0, 1), (0, 2), (0, 3), (1, 0), (1, 1), (1, 2), (1, 3)]
-    panels = [fig.add_subplot(grid[r, c]) for r, c in cells]
-    draw_explained_variance(panels[0], cumulative, color)
-    draw_trajectories(panels[1], pca_result)
-    draw_velocity(panels[2], velocity, color)
-    image = draw_session_similarity(panels[3], similarity)
-    fig.colorbar(image, ax=panels[3], label="z vs. shuffled null", shrink=0.85)
-    draw_distance_vs_lag(panels[4], similarity, drift, color)
-    draw_endpoints(panels[5], endpoints, color)
-    draw_early_late(panels[6], velocity, color)
+    A trajectories; B session similarity and drift; C endpoints; D trajectory speed
+    with early vs. late.
+    """
+    color = taste_colors([taste])[taste] if color is None else color
+    fig = plt.figure(figsize=(12, 9))
+    grid = fig.add_gridspec(2, 2, hspace=0.38, wspace=0.28)
+    ax_a = fig.add_subplot(grid[0, 0])
+    ab = grid[0, 1].subgridspec(1, 2, wspace=0.45, width_ratios=[1, 1])
+    ax_b1, ax_b2 = fig.add_subplot(ab[0]), fig.add_subplot(ab[1])
+    ax_c, ax_d = fig.add_subplot(grid[1, 0]), fig.add_subplot(grid[1, 1])
 
-    titles = [
-        (ax_raster, f"A  Example unit {unit}"),
-        (panels[0], "B  Dimensionality"),
-        (panels[1], "C  Population trajectories"),
-        (panels[2], "D  Trajectory speed"),
-        (panels[3], "E  Session similarity"),
-        (panels[4], "F  Drift across sessions"),
-        (panels[5], "G  Endpoints (3 s)"),
-        (panels[6], "H  Early vs. late speed"),
-    ]
-    for ax, title in titles:
+    draw_trajectories(ax_a, pca_result)
+    image = draw_session_similarity(ax_b1, similarity)
+    fig.colorbar(image, ax=ax_b1, orientation="horizontal", location="bottom", pad=0.2, shrink=0.9,
+                 label="z vs. time-shuffled null")
+    draw_drift_null(ax_b2, drift, color)
+    draw_endpoints(ax_c, endpoints, color)
+    draw_velocity(ax_d, velocity, color)
+
+    for ax, title in [
+        (ax_a, "A  Population trajectories"),
+        (ax_b1, "B  Session similarity and drift"),
+        (ax_c, "C  Endpoints (3 s)"),
+        (ax_d, "D  Trajectory speed"),
+    ]:
         ax.set_title(title, loc="left", fontsize=11, fontweight="bold")
     fig.suptitle(f"{taste}: example output on simulated data", fontsize=12)
     return fig
@@ -233,7 +257,7 @@ def plot_raster_psth(
     sigma_s: float = 0.15,
 ) -> Figure:
     """One column per unit: raster (trials grouped by taste) above PSTHs per taste."""
-    tastes = dataset.tastes
+    tastes = ordered_tastes(dataset.tastes)
     colors = taste_colors(tastes)
     fig, axes = plt.subplots(2, len(unit_ids), figsize=(3.6 * len(unit_ids), 5), sharex=True,
                              gridspec_kw={"height_ratios": [1.3, 1]}, squeeze=False)
@@ -251,7 +275,8 @@ def plot_explained_variance(cumulative_by_taste: dict[str, np.ndarray], threshol
     """Cumulative explained variance, one line per taste."""
     colors = taste_colors(list(cumulative_by_taste))
     fig, ax = plt.subplots(figsize=(5, 3.5))
-    for taste, cumulative in cumulative_by_taste.items():
+    for taste in ordered_tastes(cumulative_by_taste):
+        cumulative = cumulative_by_taste[taste]
         draw_explained_variance(ax, cumulative, colors[taste], label=taste, threshold=threshold)
     ax.legend(frameon=False)
     fig.tight_layout()
@@ -260,7 +285,7 @@ def plot_explained_variance(cumulative_by_taste: dict[str, np.ndarray], threshol
 
 def plot_trajectories(results_by_taste: dict[str, PCAResult]) -> Figure:
     """PC1 vs. PC2 trajectories, one panel per taste."""
-    tastes = list(results_by_taste)
+    tastes = ordered_tastes(results_by_taste)
     fig, axes = plt.subplots(1, len(tastes), figsize=(4 * len(tastes), 4), squeeze=False)
     for ax, taste in zip(axes[0], tastes):
         draw_trajectories(ax, results_by_taste[taste])
@@ -272,23 +297,37 @@ def plot_trajectories(results_by_taste: dict[str, PCAResult]) -> Figure:
 
 def plot_session_similarity(results_by_taste: dict, alpha: float = 0.05) -> Figure:
     """Session-similarity heatmaps, one panel per taste, on a shared color scale."""
-    tastes = list(results_by_taste)
+    tastes = ordered_tastes(results_by_taste)
     zmax = max(np.nanmax(np.abs(r.pairs["z"])) for r in results_by_taste.values())
     fig, axes = plt.subplots(1, len(tastes), figsize=(3.8 * len(tastes), 3.6), squeeze=False)
     for ax, taste in zip(axes[0], tastes):
         image = draw_session_similarity(ax, results_by_taste[taste], zmax=zmax, alpha=alpha)
         ax.set_title(taste)
-    fig.colorbar(image, ax=axes[0].tolist(), label="z vs. shuffled null", shrink=0.8)
+    fig.colorbar(image, ax=axes[0].tolist(), label="z vs. time-shuffled null", shrink=0.8)
     return fig
 
 
-def plot_distance_vs_lag(results_by_taste: dict, drift_by_taste: dict) -> Figure:
-    """Distance between sessions against sessions apart, one panel per taste."""
-    tastes = list(results_by_taste)
+def plot_distance_vs_lag(results_by_taste: dict) -> Figure:
+    """Distance between session pairs against sessions apart, one panel per taste."""
+    tastes = ordered_tastes(results_by_taste)
     colors = taste_colors(tastes)
     fig, axes = plt.subplots(1, len(tastes), figsize=(3.8 * len(tastes), 3.4), squeeze=False, sharey=True)
     for ax, taste in zip(axes[0], tastes):
-        draw_distance_vs_lag(ax, results_by_taste[taste], drift_by_taste[taste], colors[taste])
+        draw_distance_vs_lag(ax, results_by_taste[taste], colors[taste])
+        ax.set_title(taste)
+    for ax in axes[0][1:]:
+        ax.set_ylabel("")
+    fig.tight_layout()
+    return fig
+
+
+def plot_drift(drift_by_taste: dict) -> Figure:
+    """Mantel-test null distribution and real r, one panel per taste."""
+    tastes = ordered_tastes(drift_by_taste)
+    colors = taste_colors(tastes)
+    fig, axes = plt.subplots(1, len(tastes), figsize=(3.8 * len(tastes), 3.4), squeeze=False, sharey=True)
+    for ax, taste in zip(axes[0], tastes):
+        draw_drift_null(ax, drift_by_taste[taste], colors[taste])
         ax.set_title(taste)
     for ax in axes[0][1:]:
         ax.set_ylabel("")
@@ -298,7 +337,7 @@ def plot_distance_vs_lag(results_by_taste: dict, drift_by_taste: dict) -> Figure
 
 def plot_endpoints(results_by_taste: dict) -> Figure:
     """Observed vs. shuffled endpoints, one panel per taste."""
-    tastes = list(results_by_taste)
+    tastes = ordered_tastes(results_by_taste)
     colors = taste_colors(tastes)
     fig, axes = plt.subplots(1, len(tastes), figsize=(4 * len(tastes), 3.8), squeeze=False)
     for ax, taste in zip(axes[0], tastes):
@@ -310,7 +349,7 @@ def plot_endpoints(results_by_taste: dict) -> Figure:
 
 def plot_velocity(results_by_taste: dict) -> Figure:
     """Trajectory speed over time, one panel per taste (early and late windows shaded)."""
-    tastes = list(results_by_taste)
+    tastes = ordered_tastes(results_by_taste)
     colors = taste_colors(tastes)
     fig, axes = plt.subplots(1, len(tastes), figsize=(3.8 * len(tastes), 3.4), squeeze=False, sharey=True)
     for ax, taste in zip(axes[0], tastes):
@@ -324,7 +363,7 @@ def plot_velocity(results_by_taste: dict) -> Figure:
 
 def plot_early_late(results_by_taste: dict, anova=None) -> Figure:
     """Early vs. late speed per session, one panel per taste; optionally the ANOVA table as a footnote."""
-    tastes = list(results_by_taste)
+    tastes = ordered_tastes(results_by_taste)
     colors = taste_colors(tastes)
     fig, axes = plt.subplots(1, len(tastes), figsize=(3.2 * len(tastes), 3.4), squeeze=False, sharey=True)
     for ax, taste in zip(axes[0], tastes):
