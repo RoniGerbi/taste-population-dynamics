@@ -1,6 +1,6 @@
 # taste-population-dynamics
 
-Do populations of cortical neurons maintain a stable, trackable representation of a taste across repeated sessions? This repository contains the analysis pipeline from a computational neuroscience course project (Sagol School of Neuroscience, Tel Aviv University) that addressed this question using multi-session recordings from the gustatory cortex of a rat during taste delivery. The pipeline covers spike alignment, PSTHs, unit screening, PCA trajectories, and several tests of stability across sessions.
+Do populations of cortical neurons maintain a stable, trackable representation of a taste across repeated sessions? This repository contains an analysis pipeline based on a computational neuroscience course project (Sagol School of Neuroscience, Tel Aviv University) that addressed this question using multi-session recordings from the gustatory cortex of a rat during taste delivery. The pipeline covers spike alignment, PSTHs, unit screening, PCA trajectories, and several tests of stability across sessions.
 
 > **No real data is included.** The pipeline was developed for real recordings, which remain unpublished. A synthetic data generator that reproduces the experimental design stands in for them: it produces the example figures and lets the tests check each step against a known ground truth.
 
@@ -28,7 +28,7 @@ Notes: time windows include their start and exclude their end; shuffle-test p-va
 
 ## Example output
 
-The pipeline was built for, and applied to, multi-session Neuropixels recordings. Those recordings are unpublished and not included here. The figures below are produced from **simulated data**; they demonstrate the analyses and are not findings.
+The pipeline was developed for the analysis of multi-session Neuropixels recordings, which are unpublished and not included here. It extends the original course-project analysis with corrections and additional tests that have so far been run only on simulated data. The figures below are produced from **simulated data**; they demonstrate the analyses and are not findings.
 
 ![Rasters and PSTHs of two example units](figures/raster_psth.png)
 
