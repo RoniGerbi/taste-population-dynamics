@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "taste-population-dynamics"
-version = "0.1.0"
+version = "1.0.0"
 description = "Population dynamics of taste responses in cortical spike data: PSTHs, PCA trajectories and shuffle-based tests."
 readme = "README.md"
 requires-python = ">=3.10"

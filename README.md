@@ -4,17 +4,6 @@ Do populations of cortical neurons maintain a stable, trackable representation o
 
 > **No real data is included.** The pipeline was developed for real recordings, which remain unpublished. A synthetic data generator that reproduces the experimental design stands in for them: it produces the example figures and lets the tests check each step against a known ground truth.
 
-**Status:** work in progress, built step by step.
-
-| Step | Content | Status |
-|---|---|---|
-| 1 | Project skeleton, synthetic data, pickle-free I/O | ✅ |
-| 2 | Spike alignment, firing rates, PSTHs, population tensor | ✅ |
-| 3 | Unit screening: responsiveness and taste specificity | ✅ |
-| 4 | PCA trajectories and demo figures | ✅ |
-| 5a | Stability across sessions: session similarity, endpoints, drift | ✅ |
-| 5b | Trajectory velocity: early vs. late, repeated-measures ANOVA | ✅ |
-
 ## Pipeline
 
 1. **Load** spike times and taste-delivery times (`io`).
@@ -86,5 +75,9 @@ Churchland, M. M., Cunningham, J. P., Kaufman, M. T., Foster, J. D., Nuyujukian,
 
 ## Authors
 
-- Ron Gerbi
-- Ofek Sourani (co-author of the original course project)
+- Ron Gerbi, Department of Neurobiology, School of Neurobiology, Biochemistry & Biophysics, The George S. Wise Faculty of Life Science, Tel-Aviv University, Israel
+- Ofek Sourani (co-author of the original course project), Tel-Aviv University, Israel
+
+## Acknowledgements
+
+The recordings were collected in the lab of Dr. Anan Moran, Department of Neurobiology, School of Neurobiology, Biochemistry & Biophysics, The George S. Wise Faculty of Life Science, Tel Aviv University.
