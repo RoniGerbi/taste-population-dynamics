@@ -19,13 +19,13 @@ Notes: time windows include their start and exclude their end; shuffle-test p-va
 
 The pipeline was developed for the analysis of multi-session Neuropixels recordings, which are unpublished and not included here. It extends the original course-project analysis with corrections and additional tests that have so far been run only on simulated data. The figures below are produced from **simulated data**; they demonstrate the analyses and are not findings.
 
-![Rasters and PSTHs of two example units](figures/raster_psth.png)
+<img src="figures/raster_psth.png" alt="Rasters and PSTHs of two example units" width="500">
 
 Rasters (top; trials grouped by taste) and PSTHs (bottom) of two taste-responsive units.
 
-![Population analyses for water](figures/overview_water.png)
+ <img src="figures/overview_water.png" alt="Population analyses for water" width="700">
 
-Population analyses for one taste (water). **A** Each session's trajectory in the first two PCs (circle: delivery; triangle: 3 s later). **B** Left: distance between every pair of sessions as a z-score against a null in which each unit's time bins are shuffled within each session (`*`: FDR-corrected p < 0.05). Right: drift (Mantel test): Spearman correlation between the distance of each session pair and the number of sessions between them, for the real session order (colored line) and for all 5,040 orders of the 7 sessions (gray). **C** Session endpoints against endpoints from shuffled data. **D** Trajectory speed over time (mean ± SEM across sessions); diamonds show the mean speed in the shaded early and late windows (± SEM), compared with a paired t-test.
+   Population analyses for one taste (water). **A** Left: distance between every pair of sessions as a z-score against a null in which each unit's time bins are shuffled within each session (`*`: FDR-corrected p < 0.05). Right: drift (Mantel test): Spearman correlation between the distance of each session pair and the number of sessions between them, for the real session order (colored line) and for all 5,040 orders of the 7 sessions (gray). **B** Each session's trajectory in the first two PCs (circle: delivery; triangle: 3 s later). **C** Session endpoints against endpoints from shuffled data. **D** Trajectory speed over time (mean ± SEM across sessions); diamonds show the mean speed in the shaded early and late windows (± SEM), compared with a paired t-test.
 
 ## Synthetic data
 

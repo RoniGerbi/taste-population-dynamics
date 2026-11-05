@@ -215,32 +215,37 @@ def plot_overview(
 ) -> Figure:
     """Population analyses for one taste in a 2 x 2 figure.
 
-    A trajectories; B session similarity and drift; C endpoints; D trajectory speed
+    A session similarity and drift; B trajectories; C endpoints; D trajectory speed
     with early vs. late.
     """
     color = taste_colors([taste])[taste] if color is None else color
     fig = plt.figure(figsize=(12, 9))
     grid = fig.add_gridspec(2, 2, hspace=0.38, wspace=0.28)
-    ax_a = fig.add_subplot(grid[0, 0])
-    ab = grid[0, 1].subgridspec(1, 2, wspace=0.45, width_ratios=[1, 1])
-    ax_b1, ax_b2 = fig.add_subplot(ab[0]), fig.add_subplot(ab[1])
+    a = grid[0, 0].subgridspec(1, 2, wspace=0.45, width_ratios=[1, 1])
+    ax_a1, ax_a2 = fig.add_subplot(a[0]), fig.add_subplot(a[1])
+    ax_b = fig.add_subplot(grid[0, 1])
     ax_c, ax_d = fig.add_subplot(grid[1, 0]), fig.add_subplot(grid[1, 1])
 
-    draw_trajectories(ax_a, pca_result)
-    image = draw_session_similarity(ax_b1, similarity)
-    fig.colorbar(image, ax=ax_b1, orientation="horizontal", location="bottom", pad=0.2, shrink=0.9,
+    image = draw_session_similarity(ax_a1, similarity)
+    fig.colorbar(image, ax=ax_a1, orientation="horizontal", location="bottom", pad=0.2, shrink=0.9,
                  label="z vs. time-shuffled null")
-    draw_drift_null(ax_b2, drift, color)
+    draw_drift_null(ax_a2, drift, color)
+    draw_trajectories(ax_b, pca_result)
     draw_endpoints(ax_c, endpoints, color)
     draw_velocity(ax_d, velocity, color)
 
     for ax, title in [
-        (ax_a, "A  Population trajectories"),
-        (ax_b1, "B  Session similarity and drift"),
+        (ax_b, "B  Population trajectories"),
         (ax_c, "C  Endpoints (3 s)"),
         (ax_d, "D  Trajectory speed"),
     ]:
         ax.set_title(title, loc="left", fontsize=11, fontweight="bold")
+    ax_a2.set_title("Drift (Mantel test)", loc="left", fontsize=11)
+    # The heatmap is square, so it is shorter than its neighbor; align its title with the drift plot's.
+    top = ax_a2.get_position().y1
+    pad = plt.rcParams["axes.titlepad"] / 72 / fig.get_figheight()  # title padding, in figure units
+    fig.text(ax_a1.get_position().x0, top + pad, "A  Session similarity", fontsize=11, fontweight="bold",
+             va="baseline")
     fig.suptitle(f"{taste}: example output on simulated data", fontsize=12)
     return fig
 
