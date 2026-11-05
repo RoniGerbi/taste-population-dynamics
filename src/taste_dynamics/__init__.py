@@ -13,4 +13,4 @@ from taste_dynamics.io import load_dataset, save_dataset
 from taste_dynamics.synthetic import Dataset, make_dataset
 
 __all__ = ["Dataset", "make_dataset", "load_dataset", "save_dataset"]
-__version__ = "0.1.0"
+__version__ = "1.0.0"
